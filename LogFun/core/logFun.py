@@ -1,73 +1,54 @@
-from . import *
-import warnings
+from .config import get_config
+from .logger import Logger, add_logger_to
+from .coreFunction import make_trace_function
+from .coreClass import install_trace_methods
 from inspect import isclass, isroutine
 
 
 def traced(*args, **keywords):
-    """
-    Add to an unbound function or the methods of a class
-    - args func: the unbound function
-    - args class: a class name
-    - args method_names: the methods list of a class
-    - keywords exclude: (True) set the method list to be excluded
-    - keywords mode: `std` set logging to command line, 
-                     `dev` set logging to local file, 
-                     `run` set logging to remote server.
-    """
     obj = args[0] if args else None
-    global T_MODE, T_LOGTYPE, T_METHODS, T_EXCLUDE
-    if keywords:
-        T_MODE = keywords.get("mode", MODE)
-        T_LOGTYPE = keywords.get("logtype", LOGTYPE)
-        T_METHODS = keywords.get("methods", T_METHODS)
-        T_EXCLUDE = keywords.get("exclude", False)
-    if obj:
-        mode = T_MODE if T_MODE else MODE
-        logtype = T_LOGTYPE if T_LOGTYPE else LOGTYPE
-        T_MODE = T_LOGTYPE = ""
-        # logger for parsing and encoding
-        logger = Logger(mode, logtype, obj.__name__)
-        # add logger attr to a class or a function
-        add_logger_to(obj, logger)
-    # set @traced() as @traced
-    else:
-        return traced
+    t_methods = keywords.get("methods", [])
+    t_exclude = keywords.get("exclude", False)
 
-    # LogFun for Function
+    if obj:
+        logger = Logger(name=obj.__name__)
+        add_logger_to(obj, logger)
+    else:
+        return lambda real_obj: traced(real_obj, **keywords)
+
     if isroutine(obj):
         return make_trace_function(obj, logger)
-
-    # LogFun for Class
     elif isclass(obj):
-        methods = T_METHODS if T_METHODS else []
-        exclude = T_EXCLUDE if T_EXCLUDE else False
-        T_METHODS = []
-        T_EXCLUDE = False
-        return install_trace_methods(obj, logger, methods, exclude)
-
-    # LogFun for a class or a function input instance
+        return install_trace_methods(obj, logger, t_methods, t_exclude)
     elif isinstance(obj, tuple):
-        method_names = args[1:]
-
-        def traced_decorator(class_or_fn):
-            # input a class : @traced(logger) or @traced(logger, "method", ..)
-            if isclass(class_or_fn):
-                return install_trace_methods(class_or_fn, logger, *method_names, exclude=keywords.get("exclude", False))
-            # input a function : @traced(logger)
-            else:
-                if method_names:
-                    warnings.warn("Methods ignoring: %s.%s" % (class_or_fn.__module__, class_or_fn.__name__))
-                return make_trace_function(class_or_fn, logger)
-
-        return traced_decorator
-    # LogFun for input exclude list of a class : @traced(exclude=["method_name1", ..])
+        return lambda class_or_fn: traced(class_or_fn, **keywords)
     else:
-        method_names = args[:]
-        return lambda class_: install_trace_methods(class_, logger, *method_names, exclude=keywords.get("exclude", False))
+        return obj
 
 
-def basicConfig(*args, **keywords):
-    global MODE, LOGTYPE, OUTPUT_PAHT
-    MODE = keywords.get("mode", MODE)
-    LOGTYPE = keywords.get("logtype", LOGTYPE)
-    OUTPUT_PAHT = keywords.get("output", OUTPUT_PAHT)
+def basicConfig(**keywords):
+    """
+    Configure Global Settings.
+    Supported keys: mode, logtype, output, app_name, manager_ip, manager_port
+    """
+    config = get_config()
+
+    if "mode" in keywords:
+        config.mode = keywords.get("mode")
+    if "logtype" in keywords:
+        config.log_type = keywords.get("logtype")
+    if "output" in keywords:
+        config.output_dir = keywords.get("output")
+
+    # Batch update for other props including network config
+    update_kwargs = {}
+    for k in ["app_name", "manager_ip", "manager_port"]:
+        if k in keywords:
+            update_kwargs[k] = keywords.get(k)
+
+    if update_kwargs:
+        config.update(**update_kwargs)
+
+
+def gzip_file(filename):
+    pass

@@ -1,93 +1,75 @@
-from .utils import *
-from .coreFunction import make_trace_function, FunctionTracingGhost
-from types import FunctionType
-from functools import wraps
+import inspect
+from .coreFunction import make_trace_function
 
 
-def install_trace_methods(class_, logger, methods, exclude):
+def install_trace_methods(target_class, logger, methods=None, exclude=False):
     """
-    Install LogFun for the methods of class.
-    - class_: a class being traced
-    - methods: (list) the methods to be traced
-    - exclude: (True) regard methods as an exclusion list
+    Applies the tracing decorator to methods of a class.
+    
+    Args:
+        target_class: The class object to patch.
+        logger: The Logger instance associated with this class.
+        methods (list): List of method names to trace (or exclude).
+        exclude (bool): If True, 'methods' list acts as a blacklist. 
+                        If False (default), 'methods' list acts as a whitelist.
+                        If 'methods' is empty/None:
+                            - exclude=False (default): Trace ALL methods.
+                            - exclude=True: Trace NO methods (useless but logical).
     """
-    # confirm the method names of a class
-    if methods:
-        trace_method_names = get_trace_method_names(methods, class_, exclude)
-    else:
-        trace_method_names = get_default_trace_method_names(class_)
+    if methods is None:
+        methods = []
 
-    # decorate each method with LogFun
-    for name in trace_method_names:
-        func_ = class_.__dict__[name]
-        func_type = type(func_)
+    # Iterate over the class dictionary directly to access descriptors
+    # (staticmethod, classmethod) before they are bound.
+    for name, value in list(target_class.__dict__.items()):
 
-        if func_type is FunctionType:
-            make_logfun = make_trace_instancemethod
-        elif func_type is classmethod:
-            make_logfun = make_trace_classmethod
-        elif func_type is staticmethod:
-            make_logfun = make_trace_staticmethod
-        else:
-            warnings.warn("Method not supported: %r" % func_type)
+        # 1. Check if we should trace this attribute
+        should_trace = False
+
+        # Skip magic methods (optional, but usually safer to skip __new__, etc. unless requested)
+        # Here we allow __init__ but might want to be careful with others.
+        if name.startswith('__') and name.endswith('__') and name != '__init__':
             continue
 
-        tracing_logfun = make_logfun(func_, logger)
-        setattr(class_, name, tracing_logfun)
+        if exclude:
+            # Blacklist mode: Trace if NOT in methods list
+            if name not in methods:
+                should_trace = True
+        else:
+            # Whitelist mode:
+            # If methods list is empty, trace EVERYTHING (default behavior)
+            # If methods list is not empty, trace only if IN list
+            if not methods:
+                should_trace = True
+            elif name in methods:
+                should_trace = True
 
-    return class_
+        if not should_trace:
+            continue
 
+        # 2. Apply Tracing based on type
+        # We must verify it's actually a function/method wrapper
 
-def make_trace_instancemethod(function, logger):
-    """
-    Create LogFun for unbound function
-    - function: the function to be traced
-    - logger: logger for parsing and encoding
-    - return: an function that wraps logFun
-    """
-    # functions have a __get__ method, they can act as logFun
-    ghost = FunctionTracingGhost(function, logger)
+        # Case A: @staticmethod
+        if isinstance(value, staticmethod):
+            raw_func = value.__func__
+            traced_func = make_trace_function(raw_func, logger)
+            setattr(target_class, name, staticmethod(traced_func))
 
-    @wraps(function)
-    def autologging_traced_instancemethod_ghost(self_, *args, **keywords):
-        method = function.__get__(self_, self_.__class__)
-        return ghost(method, args, keywords)
+        # Case B: @classmethod
+        elif isinstance(value, classmethod):
+            raw_func = value.__func__
+            traced_func = make_trace_function(raw_func, logger)
+            setattr(target_class, name, classmethod(traced_func))
 
-    if not hasattr(autologging_traced_instancemethod_ghost, "__wrapped__"):
-        # __wrapped__ is only set by functools.wraps() in Python 3.2+
-        autologging_traced_instancemethod_ghost.__wrapped__ = function
+        # Case C: Regular instance method (Function in Python 3 class dict)
+        elif inspect.isfunction(value) or inspect.isroutine(value):
+            # Double check it's not a coroutine or other exotic type if needed
+            if inspect.iscoroutinefunction(value):
+                # For now, treat async functions same as sync (LogFun supports them basic way)
+                pass
 
-    return autologging_traced_instancemethod_ghost
+            traced_func = make_trace_function(value, logger)
+            setattr(target_class, name, traced_func)
 
-
-def make_trace_classmethod(method, logger):
-    """
-    Create a tracing Ghost for a class
-    - method: the method in the class to be traced
-    - logger: logger for parsing and encoding
-    - return: a method that wraps logFun
-    """
-    function = method.__func__
-    ghost = FunctionTracingGhost(function, logger)
-
-    @wraps(function)
-    def autologging_traced_classmethod_ghost(cls, *args, **keywords):
-        method = method.__get__(None, cls)
-        return ghost(method, args, keywords)
-
-    if not hasattr(autologging_traced_classmethod_ghost, "__wrapped__"):
-        # __wrapped__ is only set by functools.wraps() in Python 3.2+
-        autologging_traced_classmethod_ghost.__wrapped__ = function
-
-    return classmethod(autologging_traced_classmethod_ghost)
-
-
-def make_trace_staticmethod(method, logger):
-    """
-    Create a tracing Ghost for a static method.
-    - method: the static method to be traced
-    - logger: logger for parsing and encoding
-    - return: a method that wraps logFun
-    """
-    autologging_traced_staticmethod_ghost = make_trace_function(method.__func__, logger)
-    return staticmethod(autologging_traced_staticmethod_ghost)
+    return target_class

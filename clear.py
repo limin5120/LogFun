@@ -15,4 +15,4 @@ def clear_file(directory, del_name=['__pycache__']):
                 print(f"delete {cache_path}")
 
 
-clear_file(os.getcwd(), ['__pycache__', '.git', '.gitee', '.gitignore', '.DS_Store'])
+clear_file(os.getcwd(), ['__pycache__', '.DS_Store'])

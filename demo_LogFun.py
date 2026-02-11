@@ -1,7 +1,7 @@
 import time
 from LogFun import traced, basicConfig, gzip_file
 
-basicConfig(mode='dev', logtype='compress')
+basicConfig(mode='remote', logtype='normal')
 
 
 @traced
@@ -59,7 +59,8 @@ def class_test():
     class_test._log('compute is completed')
     return c
 
+# 
 
 if __name__ == '__main__':
     function_test()
-    gzip_file('dev.log')
+    # class_test()
