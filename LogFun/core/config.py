@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 from enum import Enum
 
@@ -6,36 +7,45 @@ DEFAULT_LOG_DIR = './logfun_output/'
 
 
 class LogMode(Enum):
-    DEV = "dev"  # Console output
-    FILE = "file"  # Local file write
-    REMOTE = "remote"  # Network socket (Manager)
+    DEV = "dev"
+    FILE = "file"
+    REMOTE = "remote"
 
 
 class LogType(Enum):
-    NORMAL = "normal"  # Plain text / JSON
-    COMPRESS = "compress"  # ID + Variables
+    NORMAL = "normal"
+    COMPRESS = "compress"
 
 
 class AgentConfig:
-    """
-    Thread-safe singleton configuration.
-    Keeps Agent lightweight: Only knows WHO to connect to, not HOW to analyze.
-    """
     def __init__(self):
-        # 1. Basic Identity & Output
         self._mode = LogMode.DEV
         self._log_type = LogType.COMPRESS
         self._output_dir = DEFAULT_LOG_DIR
-        self._app_name = "root"  # Identity
 
-        # 2. Connection Info (The only thing needed for Remote mode)
+        # [FIX] Force app_name to match the script filename (e.g., "demo_LogFun")
+        try:
+            # Get the main script name without extension
+            script_path = os.path.abspath(sys.argv[0])
+            script_name = os.path.basename(script_path)
+            self._script_name = os.path.splitext(script_name)[0]
+        except:
+            self._script_name = "unknown_app"
+
+        self._app_name = self._script_name
+        self._config_filename = f"{self._script_name}.json"
+
         self._manager_ip = "127.0.0.1"
         self._manager_port = 9999
-
         self._lock = threading.RLock()
 
         if not os.path.exists(self._output_dir):
             os.makedirs(self._output_dir, exist_ok=True)
+
+    @property
+    def config_filepath(self):
+        # Local config file path: ./logfun_output/demo_LogFun.json
+        return os.path.join(self._output_dir, self._config_filename)
 
     @property
     def mode(self):
@@ -87,17 +97,6 @@ class AgentConfig:
             return os.path.join(self._output_dir, f"{self._app_name}.log")
 
     @property
-    def template_db_path(self):
-        with self._lock:
-            return os.path.join(self._output_dir, "templates.json")
-
-    @property
-    def function_db_path(self):
-        with self._lock:
-            return os.path.join(self._output_dir, "functions.json")
-
-    # --- Network Configuration ---
-    @property
     def app_name(self):
         with self._lock:
             return self._app_name
@@ -109,15 +108,13 @@ class AgentConfig:
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
-            if k == 'mode':
-                self.mode = v
-            elif k == 'logtype':
-                self.log_type = v
-            elif k == 'output':
-                self.output_dir = v
+            if k == 'mode': self.mode = v
+            elif k == 'logtype': self.log_type = v
+            elif k == 'output': self.output_dir = v
             elif k == 'app_name':
                 with self._lock:
                     self._app_name = v
+                    self._config_filename = f"{v}.json"
             elif k == 'manager_ip':
                 with self._lock:
                     self._manager_ip = v

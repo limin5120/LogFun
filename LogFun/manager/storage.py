@@ -1,7 +1,5 @@
 import os
 import json
-import time
-import shutil
 import threading
 from .config import get_config
 
@@ -10,112 +8,113 @@ class StorageManager:
     def __init__(self):
         self.config = get_config()
         self.root_dir = self.config.get("storage", "root_dir")
-        self.registries = {}
+        self.apps_data = {}
+        # Memory storage for runtime stats (blocked counts)
+        self.app_stats = {}
         self.lock = threading.RLock()
 
     def _get_app_dir(self, app_name):
-        path = os.path.join(self.root_dir, app_name)
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
-            os.makedirs(os.path.join(path, "history"), exist_ok=True)
-        return path
+        d = os.path.join(self.root_dir, app_name)
+        os.makedirs(d, exist_ok=True)
+        return d
 
-    def sync_registry(self, app_name, client_funcs, client_tpls):
-        app_dir = self._get_app_dir(app_name)
-        self._sync_single_file(app_name, app_dir, "functions.json", client_funcs)
-        self._sync_single_file(app_name, app_dir, "templates.json", client_tpls)
-        self._load_registry_to_memory(app_name)
+    def _get_config_path(self, app_name):
+        return os.path.join(self._get_app_dir(app_name), f"{app_name}.json")
 
-    def _sync_single_file(self, app_name, app_dir, filename, client_data):
-        file_path = os.path.join(app_dir, filename)
+    def _get_log_path(self, app_name):
+        return os.path.join(self._get_app_dir(app_name), f"{app_name}.log")
 
-        # Load existing
-        server_data = None
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    server_data = json.load(f)
-            except Exception:
-                pass
-
-        # --- FIX: Robust Comparison ---
-        try:
-            # 1. Handle empty cases
-            if not client_data and not server_data:
-                return
-
-            # 2. Normalize: Use ensure_ascii=False to match file write format
-            # and sort_keys to ignore dictionary order.
-            client_str = json.dumps(client_data, sort_keys=True, ensure_ascii=False)
-            server_str = json.dumps(server_data, sort_keys=True, ensure_ascii=False) if server_data else ""
-
-            if client_str == server_str:
-                return  # Identical
-        except Exception:
-            pass
-
-        # Backup Logic
-        if server_data is not None:
-            ts = time.strftime("%Y%m%d_%H%M%S")
-            backup_name = f"{filename.split('.')[0]}_{ts}.json"
-            backup_path = os.path.join(app_dir, "history", backup_name)
-            try:
-                shutil.move(file_path, backup_path)
-                print(f"[Storage] Backed up {app_name}/{filename}")
-            except Exception:
-                pass
-
-        # Write Logic
-        try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(client_data, f, indent=0, ensure_ascii=False)
-        except Exception as e:
-            print(f"[Storage] Write failed: {e}")
-
-    def _load_registry_to_memory(self, app_name):
-        app_dir = self._get_app_dir(app_name)
-        funcs = {}
-        tpls = {}
-        try:
-            with open(os.path.join(app_dir, "functions.json"), 'r') as f:
-                funcs_raw = json.load(f)
-                funcs = {int(v): k for k, v in funcs_raw.items()}
-            with open(os.path.join(app_dir, "templates.json"), 'r') as f:
-                tpls_raw = json.load(f)
-                tpls = {int(v): k for k, v in tpls_raw.items()}
-        except Exception:
-            pass
+    def update_stats(self, app_name, stats_dict):
+        """Update blocked counts from agent."""
         with self.lock:
-            self.registries[app_name] = {"funcs": funcs, "tpls": tpls}
+            if app_name not in self.app_stats:
+                self.app_stats[app_name] = {}
 
-    def write_log(self, app_name, raw_payload, log_type="compress"):
-        try:
-            msg = str(raw_payload)
-            if not msg.endswith('\n'):
-                msg += '\n'
+            curr = self.app_stats[app_name]
+            for k, v in stats_dict.items():
+                curr[k] = v  # Sync latest cumulative count or add?
+                # Agent sends cumulative since start, so overwrite is fine IF agent is single instance.
+                # If agent restarts, count resets. Let's maximize for safety.
+                # Actually, simply taking the max or latest value is safest for display.
+                curr[k] = max(curr.get(k, 0), v)
 
-            log_file = os.path.join(self._get_app_dir(app_name), f"{app_name}.log")
-
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(msg)
-        except Exception as e:
-            print(f"[Storage] Write Error for {app_name}: {e}")
-
-    def _get_str(self, app_name, reg_type, id_val):
+    def get_app_stats(self, app_name):
         with self.lock:
-            reg = self.registries.get(app_name, {})
-            return reg.get(reg_type, {}).get(int(id_val), f"UnknownID<{id_val}>")
+            return self.app_stats.get(app_name, {})
 
-    def get_all_registries(self, app_name):
-        """Returns all synced metadata for dashboard visualization."""
+    def sync_config(self, app_name, client_config):
+        path = self._get_config_path(app_name)
         with self.lock:
-            reg = self.registries.get(app_name, {})
-            # Format data for frontend: {functions: {id: name}, templates: {id: content}}
-            return {"functions": reg.get("funcs", {}), "templates": reg.get("tpls", {})}
+            if app_name not in self.apps_data:
+                if os.path.exists(path):
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            self.apps_data[app_name] = json.load(f)
+                    except:
+                        self.apps_data[app_name] = {}
+
+            server_data = self.apps_data.get(app_name, {})
+            if not server_data: server_data = {"app_name": app_name, "functions": {}}
+
+            c_funcs = client_config.get("functions", {})
+            s_funcs = server_data.setdefault("functions", {})
+            changed = False
+
+            for fid, c_func in c_funcs.items():
+                if fid not in s_funcs:
+                    s_funcs[fid] = c_func
+                    changed = True
+                else:
+                    c_tpls = c_func.get("templates", {})
+                    s_tpls = s_funcs[fid].setdefault("templates", {})
+                    for tid, c_tpl in c_tpls.items():
+                        if tid not in s_tpls:
+                            s_tpls[tid] = c_tpl
+                            changed = True
+
+            self.apps_data[app_name] = server_data
+            if changed: self._save_to_disk(app_name)
+
+    def update_control(self, app_name, target_id, sub_id, enable):
+        with self.lock:
+            if app_name not in self.apps_data: return
+            data = self.apps_data[app_name]
+            funcs = data.get("functions", {})
+            fid = str(target_id)
+            if fid in funcs:
+                if sub_id:
+                    tid = str(sub_id)
+                    if tid in funcs[fid].get("templates", {}):
+                        funcs[fid]["templates"][tid]["enabled"] = enable
+                else:
+                    funcs[fid]["enabled"] = enable
+                    for tid in funcs[fid].get("templates", {}):
+                        funcs[fid]["templates"][tid]["enabled"] = enable
+            self._save_to_disk(app_name)
+
+    def _save_to_disk(self, app_name):
+        with open(self._get_config_path(app_name), 'w', encoding='utf-8') as f:
+            json.dump(self.apps_data[app_name], f, ensure_ascii=False, indent=2)
+
+    def get_app_config(self, app_name):
+        with self.lock:
+            if app_name not in self.apps_data:
+                path = self._get_config_path(app_name)
+                if os.path.exists(path):
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            self.apps_data[app_name] = json.load(f)
+                    except:
+                        pass
+            return self.apps_data.get(app_name, {})
+
+    def write_log(self, app_name, msg, log_type):
+        with open(self._get_log_path(app_name), 'a', encoding='utf-8') as f:
+            f.write(str(msg).strip() + "\n")
 
 
-_storage_manager = StorageManager()
+_storage = StorageManager()
 
 
 def get_storage():
-    return _storage_manager
+    return _storage

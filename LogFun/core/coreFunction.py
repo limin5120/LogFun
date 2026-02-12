@@ -6,7 +6,7 @@ from functools import wraps
 from inspect import isgenerator
 from .config import get_config, LogType
 from .agent import get_agent
-from .registry import get_function_registry
+from .registry import get_registry
 from .logger import CURRENT_LOG_BUFFER
 from .context import CURRENT_FUNC_ID
 from .controller import get_controller
@@ -26,14 +26,11 @@ def make_trace_function(function, logger):
 
 class FunctionTracingGhost(object):
     def __init__(self, function, logger):
-        # --- FIX: Use __qualname__ to capture ClassName.method_name ---
-        # __name__ gives "method", __qualname__ gives "MyClass.method"
         self.func_name = getattr(function, "__qualname__", function.__name__)
-
         self.logger = logger
         self.config = get_config()
         self.agent = get_agent()
-        self.func_registry = get_function_registry()
+        self.registry = get_registry()
         self.controller = get_controller()
 
         try:
@@ -41,21 +38,26 @@ class FunctionTracingGhost(object):
         except AttributeError:
             filename = "unknown"
 
-        # Unique Key Format: "/abs/path/to/file.py:ClassName.method_name"
         self.unique_func_key = f"{filename}:{self.func_name}"
+        # Cache func_id to avoid registry lock/lookup on every call
+        self.cached_func_id = self.registry.get_func_id(self.unique_func_key)
 
     def __call__(self, function, args, keywords):
-        # 1. Identify Function ID
-        func_id = self.func_registry.get_id(self.unique_func_key)
+        func_id = self.cached_func_id
 
-        # 2. Check Policy: Is this specific function muted?
-        if self.controller.should_mute(func_id):
-            return function(*args, **keywords)
-
-        # 3. Set Context
+        # [CRITICAL FIX]
+        # Always set the context ID first, even if the function is muted.
+        # This ensures internal logs know their parent function ID and can be controlled.
         token_fid = CURRENT_FUNC_ID.set(func_id)
 
         try:
+            # Check Policy
+            if self.controller.should_mute(func_id):
+                # If muted, run function directly but WITH context set.
+                # Internal logs will now see func_id and obey registry rules.
+                return function(*args, **keywords)
+
+            # If not muted, proceed with full tracing
             current_type = self.config.log_type
             if current_type == LogType.NORMAL:
                 return self._run_normal(function, args, keywords)
@@ -67,19 +69,18 @@ class FunctionTracingGhost(object):
             CURRENT_FUNC_ID.reset(token_fid)
 
     def _run_normal(self, function, args, keywords):
-        # Log using the qualified name so logs show "MyClass.method"
-        self.logger.info(f"Call {self.func_name} | Args: {args} Kwargs: {keywords}")
+        self.logger.info("Call %s | Args: %s Kwargs: %s", self.func_name, args, keywords)
         start_time = time.time()
         try:
             value = function(*args, **keywords)
         except Exception as e:
             duration = (time.time() - start_time) * 1000
-            self.logger.error(f"Error in {self.func_name}: {e} | Duration: {duration:.3f}ms")
+            self.logger.error("Error in %s: %s | Duration: %.3fms", self.func_name, e, duration)
             raise e
         duration = (time.time() - start_time) * 1000
         if isgenerator(value):
             return GeneratorIteratorTracingProxy(function, value, self.logger)
-        self.logger.info(f"Return {self.func_name} | Value: {value} | Duration: {duration:.3f}ms")
+        self.logger.info("Return %s | Value: %s | Duration: %.3fms", self.func_name, value, duration)
         return value
 
     def _run_compress(self, function, args, keywords, func_id):
@@ -92,27 +93,23 @@ class FunctionTracingGhost(object):
             CURRENT_LOG_BUFFER.reset(token_buf)
             duration = (time.time() - start_time) * 1000
             self._flush_compressed_log(start_time, duration, buffer, func_id)
-
         if isgenerator(value):
             return GeneratorIteratorTracingProxy(function, value, self.logger)
         return value
 
     def _flush_compressed_log(self, start_time, duration, buffer, func_id):
-        if not buffer:
-            return
-
+        if not buffer: return
         tpl_ids = [item[0] for item in buffer]
         all_vars = []
         for item in buffer:
             all_vars.extend(item[1])
-
         payload = f"{start_time:.4f}|{func_id}|{duration:.2f}|{tpl_ids}|{all_vars}"
         self.agent.log(payload)
 
 
 class GeneratorIteratorTracingProxy(object):
     def __init__(self, generator, generator_iterator, logger):
-        self.name = getattr(generator, "__qualname__", generator.__name__)  # Also fix generator name
+        self.name = getattr(generator, "__qualname__", generator.__name__)
         self._gi = generator_iterator
         self.logger = logger
 

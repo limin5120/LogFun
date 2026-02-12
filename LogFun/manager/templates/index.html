@@ -3,8 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LogFun Dashboard</title>
+    <title>LogFun Manager</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -24,23 +23,6 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-        }
-
-        .app-selector-wrapper {
-            background: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        select {
-            padding: 5px 10px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-            outline: none;
         }
 
         .card-grid {
@@ -77,25 +59,33 @@
             margin-top: 5px;
         }
 
-        .status-active {
-            color: #27ae60;
-            font-weight: bold;
-        }
-
         .section {
             background: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
         }
 
-        .section h2 {
-            margin-top: 0;
-            font-size: 18px;
-            color: #2c3e50;
-            border-left: 4px solid #3498db;
-            padding-left: 10px;
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        input[type="text"] {
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            cursor: pointer;
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
         }
 
         table {
@@ -118,61 +108,81 @@
             background: #fafafa;
         }
 
-        .badge {
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .badge-func {
-            background: #e1f5fe;
-            color: #0288d1;
-        }
-
-        .badge-tpl {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-
-        .badge-mute {
-            background: #ffebee;
-            color: #c62828;
-        }
-
         .btn {
-            padding: 5px 12px;
-            border-radius: 4px;
             border: none;
-            cursor: pointer;
-            font-size: 12px;
-            transition: 0.2s;
+            color: white;
+            transition: opacity 0.2s;
+            font-size: 11px;
+            border-radius: 4px;
+            padding: 4px 8px;
         }
 
         .btn-mute {
             background: #ff7675;
-            color: white;
-        }
-
-        .btn-mute:hover {
-            background: #d63031;
         }
 
         .btn-unmute {
-            background: #55efc4;
-            color: #006266;
-        }
-
-        .btn-unmute:hover {
             background: #00b894;
         }
 
-        code {
-            font-family: Consolas, Monaco, monospace;
-            background: #f8f9fa;
-            padding: 2px 4px;
-            color: #e83e8c;
+        .status-badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .active {
+            color: #00b894;
+            background: #e6fffa;
+        }
+
+        .muted {
+            color: #d63031;
+            background: #ffeaea;
+        }
+
+        .blocked-badge {
+            font-size: 10px;
+            background: #d63031;
+            color: white;
+            padding: 2px 5px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: bold;
+            vertical-align: middle;
+        }
+
+        .func-row {
+            background: #fff;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .func-row:hover {
+            background: #f9f9f9;
+        }
+
+        .tpl-row {
+            display: none;
+            background: #fafafa;
+        }
+
+        .tpl-row td:first-child {
+            padding-left: 30px;
+            border-left: 3px solid #eee;
+        }
+
+        .chevron {
+            display: inline-block;
+            width: 12px;
+            transition: transform 0.2s;
+            font-size: 10px;
+            color: #888;
+        }
+
+        .chevron.open {
+            transform: rotate(90deg);
         }
     </style>
 </head>
@@ -181,169 +191,62 @@
     <div class="container">
         <div class="header">
             <h1>LogFun Manager</h1>
-            <div class="app-selector-wrapper">
-                <label for="app-select">Current App:</label>
-                <select id="app-select" onchange="refreshAll()">
-                    <option value="root">root</option>
-                </select>
-                <div id="connection-status" class="status-active">● Connected</div>
-            </div>
+            <div style="color: #00b894; font-weight: bold;">● Connected</div>
         </div>
 
         <div class="card-grid">
             <div class="card">
                 <h3>Real-time QPS</h3>
                 <div class="value" id="qps-val">0</div>
-                <div class="sub">Logs / Second</div>
             </div>
             <div class="card">
                 <h3>Total Logs</h3>
                 <div class="value" id="total-val">0</div>
-                <div class="sub">Processed Logs</div>
             </div>
             <div class="card">
                 <h3>Uptime</h3>
                 <div class="value" id="uptime-val">0s</div>
-                <div class="sub">System Running</div>
             </div>
             <div class="card">
                 <h3>Active Strategy</h3>
                 <div class="value" id="strategy-val">-</div>
-                <div class="sub" id="strategy-sub">Algorithm: -</div>
+                <div class="sub" id="strategy-sub"></div>
             </div>
         </div>
 
         <div class="section">
-            <h2>Active Suppression (Blacklist)</h2>
-            <p style="color:#888; font-size:13px;">IDs currently blocked by the Balancer algorithm.</p>
-            <table id="mute-table">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Target ID</th>
-                        <th>Metadata</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="mute-body">
-                    <tr>
-                        <td colspan="4" style="text-align:center; color:#ccc;">No active suppressions</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+            <div class="controls">
+                <div>
+                    <label>App:</label>
+                    <input type="text" id="app-select" value="demo_LogFun" placeholder="App Name">
+                    <button onclick="refreshAll()">Load</button>
+                </div>
+                <input type="text" id="search-box" placeholder="Search functions..." onkeyup="renderTree()">
+            </div>
 
-        <div class="section">
-            <h2>Metadata Explorer</h2>
-            <p style="color:#888; font-size:13px;">Functions and templates registered by this App.</p>
-            <table id="registry-table">
+            <table id="tree-table">
                 <thead>
                     <tr>
-                        <th>Type</th>
-                        <th>ID</th>
-                        <th>Identifier / Content</th>
-                        <th>Control</th>
+                        <th style="width: 250px;">ID / Name</th>
+                        <th>Content</th>
+                        <th style="width: 100px;">Status</th>
+                        <th style="width: 120px;">Action</th>
                     </tr>
                 </thead>
-                <tbody id="registry-body">
-                    <tr>
-                        <td colspan="4" style="text-align:center; color:#ccc;">Loading registry...</td>
-                    </tr>
-                </tbody>
+                <tbody id="tree-body"></tbody>
             </table>
         </div>
     </div>
 
     <script>
-        let currentRegistry = { functions: {}, templates: {} };
+        let globalConfig = {};
+        // [FIX] Keep track of expanded rows to preserve state across refreshes
+        let expandedNodes = new Set();
 
-        function fetchStatus() {
-            fetch('/api/status')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('qps-val').innerText = data.qps;
-                    document.getElementById('total-val').innerText = data.total_logs.toLocaleString();
-                    document.getElementById('uptime-val').innerText = formatTime(data.uptime);
-                });
-        }
-
-        function fetchBalancer() {
-            fetch('/api/balancer')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('strategy-val').innerText = data.active_strategy.toUpperCase();
-                    document.getElementById('strategy-sub').innerText = 'Params: ' + JSON.stringify(data.params);
-                });
-        }
-
-        function fetchRegistry() {
-            const app = document.getElementById('app-select').value;
-            fetch(`/api/registry?app=${app}`)
-                .then(r => r.json())
-                .then(data => {
-                    currentRegistry = data;
-                    const body = document.getElementById('registry-body');
-                    body.innerHTML = '';
-
-                    // Functions
-                    for (let id in data.functions) {
-                        renderRow(body, 'Function', id, data.functions[id], 'badge-func');
-                    }
-                    // Templates
-                    for (let id in data.templates) {
-                        renderRow(body, 'Template', id, data.templates[id], 'badge-tpl');
-                    }
-                });
-        }
-
-        function renderRow(container, type, id, content, badgeClass) {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><span class="badge ${badgeClass}">${type}</span></td>
-                <td><code>${id}</code></td>
-                <td style="font-family:monospace; font-size:12px;">${content}</td>
-                <td><button class="btn btn-mute" onclick="sendControl('${id}', '${type}', 'mute')">Mute</button></td>
-            `;
-            container.appendChild(row);
-        }
-
-        function fetchMuteList() {
-            const app = document.getElementById('app-select').value;
-            fetch(`/api/mute_list?app=${app}`)
-                .then(r => r.json())
-                .then(data => {
-                    const body = document.getElementById('mute-body');
-                    body.innerHTML = '';
-
-                    if (!data.muted_funcs || data.muted_funcs.length === 0) {
-                        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">No active suppressions</td></tr>';
-                        return;
-                    }
-
-                    data.muted_funcs.forEach(fid => {
-                        const name = currentRegistry.functions[fid] || 'Unknown Function';
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td><span class="badge badge-mute">Muted</span></td>
-                            <td><code>${fid}</code></td>
-                            <td>${name}</td>
-                            <td><button class="btn btn-unmute" onclick="sendControl('${fid}', 'Function', 'unmute')">Unmute</button></td>
-                        `;
-                        body.appendChild(row);
-                    });
-                });
-        }
-
-        function sendControl(id, type, action) {
-            const app = document.getElementById('app-select').value;
-            fetch('/api/control', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ app, id, type, action })
-            }).then(r => r.json()).then(res => {
-                console.log('Control sent:', res);
-                fetchMuteList(); // Refresh
-            });
+        async function apiCall(url, method = 'GET', body = null) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = JSON.stringify(body);
+            return (await fetch(url, opts)).json();
         }
 
         function formatTime(seconds) {
@@ -353,20 +256,110 @@
             return `${h}h ${m}m ${s}s`;
         }
 
-        function refreshAll() {
-            fetchStatus();
-            fetchBalancer();
-            fetchRegistry();
-            fetchMuteList();
+        async function refreshAll() {
+            const app = document.getElementById('app-select').value || 'root';
+            try {
+                const [status, balancer, config] = await Promise.all([
+                    apiCall('/api/status'),
+                    apiCall('/api/balancer'),
+                    apiCall(`/api/registry?app=${app}`)
+                ]);
+
+                document.getElementById('qps-val').innerText = status.qps;
+                document.getElementById('total-val').innerText = status.total_logs.toLocaleString();
+                document.getElementById('uptime-val').innerText = formatTime(status.uptime);
+                document.getElementById('strategy-val').innerText = (balancer.active_strategy || 'N/A').toUpperCase();
+                document.getElementById('strategy-sub').innerText = JSON.stringify(balancer.params || {});
+
+                globalConfig = config;
+                renderTree();
+            } catch (e) { console.error(e); }
         }
 
-        // Intervals
-        setInterval(fetchStatus, 1000);
-        setInterval(fetchBalancer, 3000);
-        setInterval(fetchMuteList, 3000);
-        setInterval(fetchRegistry, 10000); // Registry doesn't change often
+        function toggleFunc(fid) {
+            if (expandedNodes.has(fid)) {
+                expandedNodes.delete(fid);
+            } else {
+                expandedNodes.add(fid);
+            }
+            renderTree(); // Re-render to apply new state
+        }
 
-        // Initial Load
+        function renderTree() {
+            const body = document.getElementById('tree-body');
+            // Clear body but we will rebuild it based on state
+            body.innerHTML = '';
+
+            const funcs = globalConfig.functions || {};
+            const term = document.getElementById('search-box').value.toLowerCase();
+            let hasData = false;
+
+            for (let fid in funcs) {
+                const f = funcs[fid];
+                const fName = f.name || `Func ${fid}`;
+                const fEnabled = (f.enabled !== false);
+                const fBlocked = f._blocked || 0;
+                const tpls = f.templates || {};
+
+                // Search logic
+                const matches = fName.toLowerCase().includes(term) || fid.includes(term);
+                if (term && !matches) continue;
+                hasData = true;
+
+                const isExpanded = expandedNodes.has(fid);
+
+                // Function Row
+                const row = document.createElement('tr');
+                row.className = 'func-row';
+                row.onclick = () => toggleFunc(fid);
+
+                const blockBadge = fBlocked > 0 ? `<span class="blocked-badge">Blocked: ${fBlocked}</span>` : '';
+                const chevron = `<span class="chevron ${isExpanded ? 'open' : ''}">▶</span>`;
+
+                row.innerHTML = `
+                <td>${chevron} <code>${fid}</code></td>
+                <td><strong>${fName}</strong> ${blockBadge}</td>
+                <td><span class="status-badge ${fEnabled ? 'active' : 'muted'}">${fEnabled ? 'ON' : 'OFF'}</span></td>
+                <td><button onclick="event.stopPropagation(); control('${fid}', null, '${fEnabled ? 'mute' : 'unmute'}')" 
+                    class="btn ${fEnabled ? 'btn-mute' : 'btn-unmute'}">${fEnabled ? 'Disable' : 'Enable'}</button></td>
+            `;
+                body.appendChild(row);
+
+                // Template Rows (only if expanded)
+                if (isExpanded) {
+                    for (let tid in tpls) {
+                        const t = tpls[tid];
+                        const tEnabled = (t.enabled !== false);
+                        const tBlocked = t._blocked || 0;
+                        const tBlockBadge = tBlocked > 0 ? `<span class="blocked-badge">${tBlocked}</span>` : '';
+
+                        const tRow = document.createElement('tr');
+                        tRow.className = 'tpl-row';
+                        tRow.style.display = 'table-row'; // Force show
+                        tRow.innerHTML = `
+                        <td style="text-align:right; color:#888;">T:${tid}</td>
+                        <td style="font-family:monospace; font-size:0.9em;">${t.content} ${tBlockBadge}</td>
+                        <td><span class="status-badge ${tEnabled ? 'active' : 'muted'}">${tEnabled ? 'ON' : 'OFF'}</span></td>
+                        <td><button onclick="control('${fid}', '${tid}', '${tEnabled ? 'mute' : 'unmute'}')" 
+                            class="btn ${tEnabled ? 'btn-mute' : 'btn-unmute'}">${tEnabled ? 'Mute' : 'Unmute'}</button></td>
+                    `;
+                        body.appendChild(tRow);
+                    }
+                }
+            }
+
+            if (!hasData) body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">No functions found</td></tr>';
+        }
+
+        async function control(id, subId, action) {
+            const app = document.getElementById('app-select').value;
+            const enable = (action === 'unmute');
+            // Optimistic update for better UI feel
+            await apiCall('/api/control', 'POST', { app, id, sub_id: subId, action });
+            refreshAll();
+        }
+
+        setInterval(refreshAll, 1000);
         refreshAll();
     </script>
 </body>

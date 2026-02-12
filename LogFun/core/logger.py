@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from .config import get_config, LogType, LogMode
 from .agent import get_agent
-from .registry import get_template_registry
+from .registry import get_registry
 from .context import CURRENT_FUNC_ID
 from .controller import get_controller
 
@@ -17,23 +17,25 @@ class Logger:
     def __init__(self, name="root"):
         self.name = name
         self.agent = get_agent()
-        self.tpl_registry = get_template_registry()
+        self.registry = get_registry()
         self.config = get_config()
         self.controller = get_controller()
 
     def _log(self, level, msg, args=None):
         current_type = self.config.log_type
 
-        # Always ensure a template ID is generated for metadata sync
-        tpl_id = self.tpl_registry.get_id(msg, create=True)
-
-        # Policy Check
+        # Get current function context
         func_id = CURRENT_FUNC_ID.get()
+
+        # Get/Create Template ID
+        tpl_id = self.registry.get_tpl_id(func_id, msg)
+
+        # Policy Check (Only check if we are inside a traced function)
         if func_id != 0:
             if self.controller.should_mute(func_id, tpl_id):
                 return
 
-        # Handle NORMAL mode
+        # --- Handle NORMAL mode ---
         if current_type == LogType.NORMAL:
             content = msg
             if args:
@@ -55,12 +57,13 @@ class Logger:
 
             if self.config.mode == LogMode.REMOTE:
                 payload_dict = {"ts": f"{ts},{ms:03d}", "lvl": level, "name": self.name, "msg": content, "fid": func_id, "tid": tpl_id}
-                self.agent.log(json.dumps(payload_dict))
+                # [FIX] Explicitly pass log_type="normal"
+                self.agent.log(json.dumps(payload_dict), log_type="normal")
             else:
                 payload = f"{ts},{ms:03d} [{self.name}] {level}: {content}"
-                self.agent.log(payload)
+                self.agent.log(payload, log_type="normal")
 
-        # Handle COMPRESS mode
+        # --- Handle COMPRESS mode ---
         elif current_type == LogType.COMPRESS:
             buffer = CURRENT_LOG_BUFFER.get()
             if buffer is not None:
@@ -69,7 +72,7 @@ class Logger:
                     stored_args = args[0]
                 buffer.append((tpl_id, stored_args or ()))
             else:
-                # Fallback if log is called outside a traced function
+                # Fallback: outside trace context but mode is compress
                 original_type = self.config.log_type
                 self.config.log_type = LogType.NORMAL
                 self._log(level, f"{msg} (Outside Trace Context)", args)
@@ -92,9 +95,6 @@ class Logger:
 
 
 def add_logger_to(obj, logger):
-    """
-    Helper to attach a logger instance to a class or routine.
-    """
     from inspect import isclass
 
     def mangle_name(internal_name, class_name):
