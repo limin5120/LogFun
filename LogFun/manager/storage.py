@@ -9,7 +9,6 @@ class StorageManager:
         self.config = get_config()
         self.root_dir = self.config.get("storage", "root_dir")
         self.apps_data = {}
-        # Memory storage for runtime stats (blocked counts)
         self.app_stats = {}
         self.lock = threading.RLock()
 
@@ -25,17 +24,10 @@ class StorageManager:
         return os.path.join(self._get_app_dir(app_name), f"{app_name}.log")
 
     def update_stats(self, app_name, stats_dict):
-        """Update blocked counts from agent."""
         with self.lock:
-            if app_name not in self.app_stats:
-                self.app_stats[app_name] = {}
-
+            if app_name not in self.app_stats: self.app_stats[app_name] = {}
             curr = self.app_stats[app_name]
             for k, v in stats_dict.items():
-                curr[k] = v  # Sync latest cumulative count or add?
-                # Agent sends cumulative since start, so overwrite is fine IF agent is single instance.
-                # If agent restarts, count resets. Let's maximize for safety.
-                # Actually, simply taking the max or latest value is safest for display.
                 curr[k] = max(curr.get(k, 0), v)
 
     def get_app_stats(self, app_name):
@@ -75,21 +67,41 @@ class StorageManager:
             self.apps_data[app_name] = server_data
             if changed: self._save_to_disk(app_name)
 
-    def update_control(self, app_name, target_id, sub_id, enable):
+    def update_control(self, app_name, target_id, sub_id, enable, source="manual"):
+        """
+        Update enabled status.
+        [FIX] Support 'source' to track manual vs balancer mutes.
+        """
         with self.lock:
             if app_name not in self.apps_data: return
             data = self.apps_data[app_name]
             funcs = data.get("functions", {})
             fid = str(target_id)
+
             if fid in funcs:
+                target_node = None
+
                 if sub_id:
                     tid = str(sub_id)
                     if tid in funcs[fid].get("templates", {}):
-                        funcs[fid]["templates"][tid]["enabled"] = enable
+                        target_node = funcs[fid]["templates"][tid]
                 else:
-                    funcs[fid]["enabled"] = enable
+                    target_node = funcs[fid]
+                    # Cascade disable to templates
                     for tid in funcs[fid].get("templates", {}):
-                        funcs[fid]["templates"][tid]["enabled"] = enable
+                        t_node = funcs[fid]["templates"][tid]
+                        t_node["enabled"] = enable
+                        if not enable: t_node["muted_by"] = source
+                        else: t_node.pop("muted_by", None)
+
+                if target_node:
+                    target_node["enabled"] = enable
+                    if not enable:
+                        target_node["muted_by"] = source
+                    else:
+                        # Clear metadata if re-enabling
+                        target_node.pop("muted_by", None)
+
             self._save_to_disk(app_name)
 
     def _save_to_disk(self, app_name):

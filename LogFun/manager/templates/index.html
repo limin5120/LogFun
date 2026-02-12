@@ -56,8 +56,11 @@
         .card .sub {
             font-size: 12px;
             color: #aaa;
-            margin-top: 5px;
+            margin-top: 8px;
+            min-height: 20px;
         }
+
+        /* Increased spacing */
 
         .section {
             background: white;
@@ -111,10 +114,15 @@
         .btn {
             border: none;
             color: white;
-            transition: opacity 0.2s;
-            font-size: 11px;
             border-radius: 4px;
             padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
         }
 
         .btn-mute {
@@ -142,6 +150,14 @@
             background: #ffeaea;
         }
 
+        /* Manual Mute */
+        .auto-muted {
+            color: #6c5ce7;
+            background: #dfe6e9;
+        }
+
+        /* Balancer Mute */
+
         .blocked-badge {
             font-size: 10px;
             background: #d63031;
@@ -151,6 +167,20 @@
             margin-left: 8px;
             font-weight: bold;
             vertical-align: middle;
+        }
+
+        /* Param Badges */
+        .param-badge {
+            display: inline-block;
+            background: #f0f2f5;
+            color: #555;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11px;
+            margin-right: 5px;
+            margin-bottom: 2px;
+            font-family: monospace;
         }
 
         .func-row {
@@ -166,11 +196,6 @@
         .tpl-row {
             display: none;
             background: #fafafa;
-        }
-
-        .tpl-row td:first-child {
-            padding-left: 30px;
-            border-left: 3px solid #eee;
         }
 
         .chevron {
@@ -240,7 +265,6 @@
 
     <script>
         let globalConfig = {};
-        // [FIX] Keep track of expanded rows to preserve state across refreshes
         let expandedNodes = new Set();
 
         async function apiCall(url, method = 'GET', body = null) {
@@ -256,6 +280,16 @@
             return `${h}h ${m}m ${s}s`;
         }
 
+        // Helper to format params cleanly
+        function renderParams(params) {
+            if (!params || Object.keys(params).length === 0) return '<span style="color:#ccc">Default</span>';
+            return Object.entries(params).map(([k, v]) => {
+                // Convert "window_size" -> "Window Size"
+                const label = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                return `<span class="param-badge">${label}: ${v}</span>`;
+            }).join('');
+        }
+
         async function refreshAll() {
             const app = document.getElementById('app-select').value || 'root';
             try {
@@ -268,8 +302,10 @@
                 document.getElementById('qps-val').innerText = status.qps;
                 document.getElementById('total-val').innerText = status.total_logs.toLocaleString();
                 document.getElementById('uptime-val').innerText = formatTime(status.uptime);
+
+                // Strategy Display Update
                 document.getElementById('strategy-val').innerText = (balancer.active_strategy || 'N/A').toUpperCase();
-                document.getElementById('strategy-sub').innerText = JSON.stringify(balancer.params || {});
+                document.getElementById('strategy-sub').innerHTML = renderParams(balancer.params);
 
                 globalConfig = config;
                 renderTree();
@@ -277,17 +313,19 @@
         }
 
         function toggleFunc(fid) {
-            if (expandedNodes.has(fid)) {
-                expandedNodes.delete(fid);
-            } else {
-                expandedNodes.add(fid);
-            }
-            renderTree(); // Re-render to apply new state
+            if (expandedNodes.has(fid)) expandedNodes.delete(fid);
+            else expandedNodes.add(fid);
+            renderTree();
+        }
+
+        function renderStatusBadge(enabled, mutedBy) {
+            if (enabled) return '<span class="status-badge active">ON</span>';
+            if (mutedBy === 'balancer') return '<span class="status-badge auto-muted">AUTO</span>';
+            return '<span class="status-badge muted">OFF</span>';
         }
 
         function renderTree() {
             const body = document.getElementById('tree-body');
-            // Clear body but we will rebuild it based on state
             body.innerHTML = '';
 
             const funcs = globalConfig.functions || {};
@@ -301,45 +339,43 @@
                 const fBlocked = f._blocked || 0;
                 const tpls = f.templates || {};
 
-                // Search logic
                 const matches = fName.toLowerCase().includes(term) || fid.includes(term);
                 if (term && !matches) continue;
                 hasData = true;
 
                 const isExpanded = expandedNodes.has(fid);
-
-                // Function Row
                 const row = document.createElement('tr');
                 row.className = 'func-row';
                 row.onclick = () => toggleFunc(fid);
 
-                const blockBadge = fBlocked > 0 ? `<span class="blocked-badge">Blocked: ${fBlocked}</span>` : '';
+                const blockBadge = (fBlocked > 0 && !fEnabled) ? `<span class="blocked-badge">Blocked: ${fBlocked}</span>` : '';
+                const statusBadge = renderStatusBadge(fEnabled, f.muted_by);
                 const chevron = `<span class="chevron ${isExpanded ? 'open' : ''}">▶</span>`;
 
                 row.innerHTML = `
                 <td>${chevron} <code>${fid}</code></td>
                 <td><strong>${fName}</strong> ${blockBadge}</td>
-                <td><span class="status-badge ${fEnabled ? 'active' : 'muted'}">${fEnabled ? 'ON' : 'OFF'}</span></td>
+                <td>${statusBadge}</td>
                 <td><button onclick="event.stopPropagation(); control('${fid}', null, '${fEnabled ? 'mute' : 'unmute'}')" 
                     class="btn ${fEnabled ? 'btn-mute' : 'btn-unmute'}">${fEnabled ? 'Disable' : 'Enable'}</button></td>
             `;
                 body.appendChild(row);
 
-                // Template Rows (only if expanded)
                 if (isExpanded) {
                     for (let tid in tpls) {
                         const t = tpls[tid];
                         const tEnabled = (t.enabled !== false);
                         const tBlocked = t._blocked || 0;
-                        const tBlockBadge = tBlocked > 0 ? `<span class="blocked-badge">${tBlocked}</span>` : '';
+                        const tStatusBadge = renderStatusBadge(tEnabled, t.muted_by);
+                        const tBlockBadge = (tBlocked > 0 && !tEnabled) ? `<span class="blocked-badge">${tBlocked}</span>` : '';
 
                         const tRow = document.createElement('tr');
                         tRow.className = 'tpl-row';
-                        tRow.style.display = 'table-row'; // Force show
+                        tRow.style.display = 'table-row';
                         tRow.innerHTML = `
                         <td style="text-align:right; color:#888;">T:${tid}</td>
                         <td style="font-family:monospace; font-size:0.9em;">${t.content} ${tBlockBadge}</td>
-                        <td><span class="status-badge ${tEnabled ? 'active' : 'muted'}">${tEnabled ? 'ON' : 'OFF'}</span></td>
+                        <td>${tStatusBadge}</td>
                         <td><button onclick="control('${fid}', '${tid}', '${tEnabled ? 'mute' : 'unmute'}')" 
                             class="btn ${tEnabled ? 'btn-mute' : 'btn-unmute'}">${tEnabled ? 'Mute' : 'Unmute'}</button></td>
                     `;
@@ -347,14 +383,12 @@
                     }
                 }
             }
-
             if (!hasData) body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">No functions found</td></tr>';
         }
 
         async function control(id, subId, action) {
             const app = document.getElementById('app-select').value;
             const enable = (action === 'unmute');
-            // Optimistic update for better UI feel
             await apiCall('/api/control', 'POST', { app, id, sub_id: subId, action });
             refreshAll();
         }

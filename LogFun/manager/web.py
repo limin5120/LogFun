@@ -33,24 +33,27 @@ def api_balancer():
 def api_registry():
     app_name = request.args.get('app', 'root')
     storage = get_storage()
-
-    # Get Config Tree
     config = storage.get_app_config(app_name)
-
-    # [FIX] Get Runtime Stats (Blocked Counts)
     stats = storage.get_app_stats(app_name)
 
-    # Merge stats into config for easier frontend consumption
     if config and "functions" in config:
         for fid, func in config["functions"].items():
-            # Inject blocked count for function
-            func["_blocked"] = stats.get(fid, 0)
+            # Inject stats and blocked info
+            # blocked stats might be cleared in registry, but storage accumulates max.
+            # However, if re-enabled, we want to hide it.
+            # If function is enabled, we force display 0 (or hide) for clarity.
+            if func.get("enabled", True):
+                func["_blocked"] = 0
+            else:
+                func["_blocked"] = stats.get(fid, 0)
 
-            # Inject blocked count for templates
             if "templates" in func:
                 for tid, tpl in func["templates"].items():
                     stats_key = f"{fid}:{tid}"
-                    tpl["_blocked"] = stats.get(stats_key, 0)
+                    if tpl.get("enabled", True):
+                        tpl["_blocked"] = 0
+                    else:
+                        tpl["_blocked"] = stats.get(stats_key, 0)
 
     return jsonify(config)
 
@@ -59,7 +62,8 @@ def api_registry():
 def api_control():
     d = request.json
     enable = (d.get('action') == 'unmute')
-    get_storage().update_control(d.get('app', 'root'), d.get('id'), d.get('sub_id'), enable)
+    # [FIX] Mark as manual control
+    get_storage().update_control(d.get('app', 'root'), d.get('id'), d.get('sub_id'), enable, source="manual")
     return jsonify({"status": "ok"})
 
 

@@ -1,7 +1,7 @@
 import time
 from LogFun import traced, basicConfig, gzip_file
 
-basicConfig(mode='remote', logtype='compress')
+basicConfig(mode='file', logtype='compress')
 
 
 @traced

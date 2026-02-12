@@ -2,7 +2,7 @@ import os
 import json
 import threading
 
-DEFAULT_SERVER_CONFIG = {"server": {"host": "0.0.0.0", "port": 9999}, "storage": {"root_dir": "./logfun_data"}, "algo_config": {"enable": True, "active": "zscore", "zscore": {"window_size": 180, "threshold": 3.0}, "weighted_entropy": {"window_size": 180, "zscore_threshold": 3.0, "entropy_threshold": 0.8, "min_samples": 20}}}
+DEFAULT_SERVER_CONFIG = {"server": {"host": "0.0.0.0", "port": 9999}, "storage": {"root_dir": "./logfun_data"}, "algo_config": {"enable": True, "active": "weighted_entropy", "zscore": {"window_size": 180, "threshold": 3.0}, "weighted_entropy": {"window_size": 180, "zscore_threshold": 3.0, "entropy_threshold": 0.8, "min_samples": 20}}}
 
 
 class ServerConfig:

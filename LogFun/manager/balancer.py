@@ -41,7 +41,6 @@ class ZScoreStrategy(BaseStrategy):
                     ts.popleft()
                 if ts: counts[fid] = len(ts)
                 else: del self.data[app][fid]
-
         if len(counts) < 2: return []
         vals = list(counts.values())
         mean = statistics.mean(vals)
@@ -50,11 +49,9 @@ class ZScoreStrategy(BaseStrategy):
         except:
             return []
         if stdev == 0: return []
-
         mutes = []
         for fid, c in counts.items():
-            if (c - mean) / stdev > thresh:
-                mutes.append(fid)
+            if (c - mean) / stdev > thresh: mutes.append(fid)
         return mutes
 
 
@@ -67,13 +64,13 @@ class LogBalancer:
         self.strategy.record(app, fid, time.time(), vars)
 
     def run_analysis_cycle(self, app):
-        # Identify spammers
         mutes = self.strategy.analyze(app)
         if mutes:
             storage = get_storage()
             for fid in mutes:
                 print(f"[Balancer] Auto-muting high freq function: {fid}")
-                storage.update_control(app, fid, None, False)
+                # [FIX] Mark as muted by balancer
+                storage.update_control(app, fid, None, False, source="balancer")
 
 
 _balancer = LogBalancer()

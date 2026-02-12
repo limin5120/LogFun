@@ -22,13 +22,9 @@ class UnifiedRegistry:
         self.config = get_config()
         self.data_lock = threading.RLock()
 
-        # Configuration Data
         self.data = {"app_name": self.config.app_name, "functions": {}}
 
-        # Runtime Stats for Balancer Visibility
-        # Structure: { "func_id": count, "func_id:tpl_id": count }
         self.blocked_stats = {}
-
         self.func_name_to_id = {}
         self.tpl_content_to_id = {}
         self.next_func_id = 1
@@ -67,7 +63,6 @@ class UnifiedRegistry:
         try:
             from .net import get_network_client
             client = get_network_client()
-            # Sync final stats and config on exit
             client.send_handshake(blocking=True)
             client.disconnect()
         except:
@@ -107,18 +102,13 @@ class UnifiedRegistry:
             return 0
 
     def is_enabled(self, func_id, tpl_id=None):
-        """
-        Check if allowed. If blocked, increment stats.
-        """
         fid_str = str(func_id)
         func_data = self.data["functions"].get(fid_str)
 
-        # Function Level Check
         if func_data and not func_data.get("enabled", True):
             self._record_block(fid_str)
             return False
 
-        # Template Level Check
         if tpl_id is not None:
             tid_str = str(tpl_id)
             if func_data:
@@ -126,32 +116,43 @@ class UnifiedRegistry:
                 if tpl_data and not tpl_data.get("enabled", True):
                     self._record_block(f"{fid_str}:{tid_str}")
                     return False
-
         return True
 
     def _record_block(self, key):
-        # Lightweight stats increment (Race condition acceptable for stats)
         try:
             self.blocked_stats[key] = self.blocked_stats.get(key, 0) + 1
         except:
             pass
 
     def get_and_clear_stats(self):
-        """Retrieve current stats to send to server."""
-        # We copy current stats. We don't clear them to keep cumulative counts consistent for UI,
-        # or we can clear delta. Let's send cumulative.
         return self.blocked_stats.copy()
 
     def sync_from_server(self, server_data):
+        """
+        Merge server config.
+        [FIX] Reset blocked_stats when re-enabling logs.
+        """
         with self.data_lock:
             server_funcs = server_data.get("functions", {})
             local_funcs = self.data["functions"]
+
             for fid, s_func in server_funcs.items():
                 if fid in local_funcs:
-                    local_funcs[fid]["enabled"] = s_func.get("enabled", True)
+                    is_enabled = s_func.get("enabled", True)
+                    local_funcs[fid]["enabled"] = is_enabled
+
+                    # [FIX] Clear stats if re-enabled
+                    if is_enabled:
+                        self.blocked_stats.pop(str(fid), None)
+
                     l_tpls = local_funcs[fid]["templates"]
                     for tid, s_tpl in s_func.get("templates", {}).items():
-                        if tid in l_tpls: l_tpls[tid]["enabled"] = s_tpl.get("enabled", True)
+                        if tid in l_tpls:
+                            t_enabled = s_tpl.get("enabled", True)
+                            l_tpls[tid]["enabled"] = t_enabled
+                            # [FIX] Clear stats for template
+                            if t_enabled:
+                                self.blocked_stats.pop(f"{fid}:{tid}", None)
                         else:
                             l_tpls[tid] = s_tpl
                             self.tpl_content_to_id[(int(fid), s_tpl["content"])] = int(tid)
