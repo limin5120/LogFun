@@ -6,7 +6,7 @@ from functools import wraps
 from inspect import isgenerator
 from .config import get_config, LogType
 from .agent import get_agent
-from .registry import get_registry
+from .registry import get_registry  # [FIX] Import unified registry
 from .logger import CURRENT_LOG_BUFFER
 from .context import CURRENT_FUNC_ID
 from .controller import get_controller
@@ -30,7 +30,7 @@ class FunctionTracingGhost(object):
         self.logger = logger
         self.config = get_config()
         self.agent = get_agent()
-        self.registry = get_registry()
+        self.registry = get_registry()  # [FIX]
         self.controller = get_controller()
 
         try:
@@ -39,25 +39,18 @@ class FunctionTracingGhost(object):
             filename = "unknown"
 
         self.unique_func_key = f"{filename}:{self.func_name}"
-        # Cache func_id to avoid registry lock/lookup on every call
+        # Cache ID for performance
         self.cached_func_id = self.registry.get_func_id(self.unique_func_key)
 
     def __call__(self, function, args, keywords):
         func_id = self.cached_func_id
-
-        # [CRITICAL FIX]
-        # Always set the context ID first, even if the function is muted.
-        # This ensures internal logs know their parent function ID and can be controlled.
+        # [CRITICAL] Set context first to allow internal logging control even if muted
         token_fid = CURRENT_FUNC_ID.set(func_id)
 
         try:
-            # Check Policy
             if self.controller.should_mute(func_id):
-                # If muted, run function directly but WITH context set.
-                # Internal logs will now see func_id and obey registry rules.
                 return function(*args, **keywords)
 
-            # If not muted, proceed with full tracing
             current_type = self.config.log_type
             if current_type == LogType.NORMAL:
                 return self._run_normal(function, args, keywords)
@@ -69,6 +62,7 @@ class FunctionTracingGhost(object):
             CURRENT_FUNC_ID.reset(token_fid)
 
     def _run_normal(self, function, args, keywords):
+        # [FIX] Use static template string to prevent template ID explosion
         self.logger.info("Call %s | Args: %s Kwargs: %s", self.func_name, args, keywords)
         start_time = time.time()
         try:

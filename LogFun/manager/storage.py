@@ -69,11 +69,21 @@ class StorageManager:
 
     def update_control(self, app_name, target_id, sub_id, enable, source="manual"):
         """
-        Update enabled status.
-        [FIX] Support 'source' to track manual vs balancer mutes.
+        Update enabled status with lazy loading support.
         """
         with self.lock:
-            if app_name not in self.apps_data: return
+            # [FIX 2] Ensure app data is loaded if missing in memory (e.g. fresh restart)
+            if app_name not in self.apps_data:
+                path = self._get_config_path(app_name)
+                if os.path.exists(path):
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            self.apps_data[app_name] = json.load(f)
+                    except:
+                        return
+                else:
+                    return
+
             data = self.apps_data[app_name]
             funcs = data.get("functions", {})
             fid = str(target_id)
@@ -99,7 +109,6 @@ class StorageManager:
                     if not enable:
                         target_node["muted_by"] = source
                     else:
-                        # Clear metadata if re-enabling
                         target_node.pop("muted_by", None)
 
             self._save_to_disk(app_name)
