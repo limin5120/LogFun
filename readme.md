@@ -1,7 +1,3 @@
-Based on the analysis of your codebase and the requirements, here is the professional English version of the `README.md` file.
-
----
-
 # LogFun: An Efficient Function-Level Log Management Framework for Systems Implemented with Python
 
 > **LogFun, a function-level logging framework that achieves efficient logging and runtime control. It enables efficient log compression and extraction of log templates and variables, as well as automatically identifies high-frequency and redundant logs natively.**
