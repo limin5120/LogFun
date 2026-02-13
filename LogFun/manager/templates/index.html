@@ -95,6 +95,7 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            position: relative;
         }
 
         .card h3 {
@@ -124,6 +125,21 @@
             color: #aaa;
             margin-top: 8px;
             min-height: 20px;
+        }
+
+        .settings-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #aaa;
+        }
+
+        .settings-btn:hover {
+            color: var(--primary);
         }
 
         .section {
@@ -310,6 +326,62 @@
         .log-func {
             color: #0984e3;
         }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 350px;
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            font-size: 16px;
+            color: var(--dark);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 
@@ -347,6 +419,7 @@
                 </div>
                 <div class="card">
                     <h3>Active Strategy</h3>
+                    <button class="settings-btn" onclick="openModal()">⚙️</button>
                     <div class="value-sm" id="strategy-val">-</div>
                     <div class="sub" id="strategy-sub"></div>
                 </div>
@@ -383,14 +456,12 @@
                     <button class="btn btn-action" onclick="searchLogs()">Search</button>
                     <button class="btn" style="background:#636e72" onclick="downloadLogs()">⬇ Export</button>
                 </div>
-
                 <div class="upload-area">
                     <label>Offline Decode:</label>
                     <input type="file" id="file-log" accept=".log">
                     <input type="file" id="file-json" accept=".json">
                     <button class="btn btn-action" onclick="uploadAndDecode()">Upload & Decode</button>
                 </div>
-
                 <div style="overflow-x: auto; margin-top:20px; max-height:600px; overflow-y:auto;">
                     <table class="log-table">
                         <thead>
@@ -413,6 +484,24 @@
         </div>
     </div>
 
+    <div id="strategy-modal" class="modal">
+        <div class="modal-content">
+            <h2>Configure Strategy</h2>
+            <div class="form-group">
+                <label>Strategy Type</label>
+                <select id="cfg-strategy" onchange="renderStrategyForm()">
+                    <option value="zscore">Z-Score (Frequency Spike)</option>
+                    <option value="weighted_entropy">Weighted Entropy (Info Content)</option>
+                </select>
+            </div>
+            <div id="cfg-params"></div>
+            <div class="modal-actions">
+                <button class="btn" style="background:#ccc" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-action" onclick="saveStrategy()">Save & Apply</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let globalConfig = {};
         let expandedNodes = new Set();
@@ -428,18 +517,11 @@
                 const apps = await apiCall('/api/apps');
                 const select = document.getElementById('app-select');
                 select.innerHTML = '';
-
                 if (apps.length === 0) {
-                    const opt = document.createElement('option');
-                    opt.text = "No Apps Found";
-                    select.add(opt);
-                    return;
+                    const opt = document.createElement('option'); opt.text = "No Apps Found"; select.add(opt); return;
                 }
-
                 apps.forEach(app => {
-                    const opt = document.createElement('option');
-                    opt.value = app;
-                    opt.text = app;
+                    const opt = document.createElement('option'); opt.value = app; opt.text = app;
                     if (app === 'demo_LogFun') opt.selected = true;
                     select.add(opt);
                 });
@@ -451,8 +533,7 @@
             currentTab = tab;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById(`tab-${tab}`).classList.add('active');
+            event.target.classList.add('active'); document.getElementById(`tab-${tab}`).classList.add('active');
             if (tab === 'dashboard') refreshAll();
         }
 
@@ -462,11 +543,8 @@
             return (await fetch(url, opts)).json();
         }
 
-        // [FIX] Removed decimal places from uptime display
         function formatTime(s) {
-            const h = Math.floor(s / 3600);
-            const m = Math.floor((s % 3600) / 60);
-            const sec = Math.floor(s % 60);
+            const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const sec = Math.floor(s % 60);
             return `${h}h ${m}m ${sec}s`;
         }
 
@@ -503,38 +581,23 @@
         }
 
         function renderTree() {
-            const body = document.getElementById('tree-body');
-            body.innerHTML = '';
+            const body = document.getElementById('tree-body'); body.innerHTML = '';
             const funcs = globalConfig.functions || {};
             const filter = document.getElementById('filter-box').value.toLowerCase();
             let hasData = false;
-
             for (let fid in funcs) {
                 const f = funcs[fid];
                 const fName = f.name || `Func ${fid}`;
                 if (filter && !fName.toLowerCase().includes(filter) && !fid.includes(filter)) continue;
                 hasData = true;
-
                 const isExpanded = expandedNodes.has(fid);
-                const row = document.createElement('tr');
-                row.className = 'func-row';
-                row.onclick = () => toggleFunc(fid);
-
+                const row = document.createElement('tr'); row.className = 'func-row'; row.onclick = () => toggleFunc(fid);
                 let statusBadge = f.enabled ? '<span class="status-badge badge-on">ON</span>' : '<span class="status-badge badge-off">OFF</span>';
                 if (!f.enabled && f.muted_by === 'balancer') statusBadge = '<span class="status-badge badge-auto">AUTO</span>';
-
                 const blockBadge = (!f.enabled && f._blocked > 0) ? `<span class="badge-blocked">${f._blocked}</span>` : '';
                 const chevron = `<span class="chevron ${isExpanded ? 'open' : ''}">▶</span>`;
-
-                row.innerHTML = `
-                <td>${chevron} <code>${fid}</code></td>
-                <td><strong>${fName}</strong> ${blockBadge}</td>
-                <td>${statusBadge}</td>
-                <td><button onclick="event.stopPropagation(); control('${fid}', null, '${f.enabled ? 'mute' : 'unmute'}')" 
-                    class="btn ${f.enabled ? 'btn-mute' : 'btn-unmute'}">${f.enabled ? 'Disable' : 'Enable'}</button></td>
-            `;
+                row.innerHTML = `<td>${chevron} <code>${fid}</code></td><td><strong>${fName}</strong> ${blockBadge}</td><td>${statusBadge}</td><td><button onclick="event.stopPropagation(); control('${fid}', null, '${f.enabled ? 'mute' : 'unmute'}')" class="btn ${f.enabled ? 'btn-mute' : 'btn-unmute'}">${f.enabled ? 'Disable' : 'Enable'}</button></td>`;
                 body.appendChild(row);
-
                 if (isExpanded) {
                     const tpls = f.templates || {};
                     for (let tid in tpls) {
@@ -542,17 +605,8 @@
                         let tStatus = t.enabled ? '<span class="status-badge badge-on">ON</span>' : '<span class="status-badge badge-off">OFF</span>';
                         if (!t.enabled && t.muted_by === 'balancer') tStatus = '<span class="status-badge badge-auto">AUTO</span>';
                         const tBlockBadge = (!t.enabled && t._blocked > 0) ? `<span class="badge-blocked">${t._blocked}</span>` : '';
-
-                        const tRow = document.createElement('tr');
-                        tRow.className = 'tpl-row';
-                        tRow.style.display = 'table-row';
-                        tRow.innerHTML = `
-                        <td style="text-align:right; color:#888;">T:${tid}</td>
-                        <td style="font-family:monospace; font-size:0.9em;">${t.content} ${tBlockBadge}</td>
-                        <td>${tStatus}</td>
-                        <td><button onclick="control('${fid}', '${tid}', '${t.enabled ? 'mute' : 'unmute'}')" 
-                            class="btn ${t.enabled ? 'btn-mute' : 'btn-unmute'}">${t.enabled ? 'Mute' : 'Unmute'}</button></td>
-                    `;
+                        const tRow = document.createElement('tr'); tRow.className = 'tpl-row'; tRow.style.display = 'table-row';
+                        tRow.innerHTML = `<td style="text-align:right; color:#888;">T:${tid}</td><td style="font-family:monospace; font-size:0.9em;">${t.content} ${tBlockBadge}</td><td>${tStatus}</td><td><button onclick="control('${fid}', '${tid}', '${t.enabled ? 'mute' : 'unmute'}')" class="btn ${t.enabled ? 'btn-mute' : 'btn-unmute'}">${t.enabled ? 'Mute' : 'Unmute'}</button></td>`;
                         body.appendChild(tRow);
                     }
                 }
@@ -566,13 +620,49 @@
             refreshAll();
         }
 
-        function renderLogs(logs) {
-            const tbody = document.getElementById('search-results');
-            tbody.innerHTML = '';
-            if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">No matching logs found.</td></tr>';
-                return;
+        // --- Strategy Modal Logic ---
+        function openModal() {
+            document.getElementById('strategy-modal').style.display = 'flex';
+            renderStrategyForm();
+        }
+        function closeModal() { document.getElementById('strategy-modal').style.display = 'none'; }
+
+        function renderStrategyForm() {
+            const type = document.getElementById('cfg-strategy').value;
+            const container = document.getElementById('cfg-params');
+            if (type === 'zscore') {
+                container.innerHTML = `
+                <div class="form-group"><label>Window Size (sec)</label><input type="number" id="p-win" value="180"></div>
+                <div class="form-group"><label>Threshold (Sigma)</label><input type="number" id="p-thresh" value="3.0" step="0.1"></div>
+            `;
+            } else {
+                container.innerHTML = `
+                <div class="form-group"><label>Window Size (sec)</label><input type="number" id="p-win" value="60"></div>
+                <div class="form-group"><label>Threshold (Sigma)</label><input type="number" id="p-thresh" value="3.0" step="0.1"></div>
+                <div class="form-group"><label>Min Entropy</label><input type="number" id="p-min" value="1.5" step="0.1"></div>
+            `;
             }
+        }
+
+        async function saveStrategy() {
+            const type = document.getElementById('cfg-strategy').value;
+            const win = document.getElementById('p-win').value;
+            const thresh = document.getElementById('p-thresh').value;
+            const params = { window_size: parseInt(win), threshold: parseFloat(thresh) };
+
+            if (type === 'weighted_entropy') {
+                params.min_entropy = parseFloat(document.getElementById('p-min').value);
+            }
+
+            await apiCall('/api/balancer/switch', 'POST', { strategy: type, params: params });
+            closeModal();
+            refreshAll();
+        }
+
+        // --- Search & Log Logic ---
+        function renderLogs(logs) {
+            const tbody = document.getElementById('search-results'); tbody.innerHTML = '';
+            if (logs.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">No matching logs found.</td></tr>'; return; }
             logs.forEach(line => {
                 const parts = line.match(/^(.+?) \[(.+?)\] \[(.+?)\] (.*)$/);
                 if (parts) {
@@ -580,47 +670,30 @@
                     row.innerHTML = `<td class="log-time">${parts[1]}</td><td class="log-lvl lvl-${parts[2]}">${parts[2]}</td><td class="log-func">${parts[3]}</td><td class="log-msg">${parts[4]}</td>`;
                     tbody.appendChild(row);
                 } else {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `<td colspan="4"><pre>${line}</pre></td>`;
-                    tbody.appendChild(row);
+                    const row = document.createElement('tr'); row.innerHTML = `<td colspan="4"><pre>${line}</pre></td>`; tbody.appendChild(row);
                 }
             });
         }
 
         function handleEnter(e) { if (e.key === 'Enter') searchLogs(); }
-
         async function searchLogs() {
-            const app = document.getElementById('app-select').value;
-            const type = document.getElementById('search-type').value;
-            const kw = document.getElementById('search-kw').value;
+            const app = document.getElementById('app-select').value; const type = document.getElementById('search-type').value; const kw = document.getElementById('search-kw').value;
             if (!app || !kw) { alert("App Name and Keyword are required"); return; }
             const res = await fetch(`/api/search?app=${app}&type=${type}&kw=${encodeURIComponent(kw)}`);
-            const logs = await res.json();
-            renderLogs(logs);
+            const logs = await res.json(); renderLogs(logs);
         }
-
         async function uploadAndDecode() {
-            const fLog = document.getElementById('file-log').files[0];
-            const fJson = document.getElementById('file-json').files[0];
+            const fLog = document.getElementById('file-log').files[0]; const fJson = document.getElementById('file-json').files[0];
             if (!fLog || !fJson) { alert("Please select both .log and .json files"); return; }
-
-            const formData = new FormData();
-            formData.append('file_log', fLog);
-            formData.append('file_config', fJson);
-
+            const formData = new FormData(); formData.append('file_log', fLog); formData.append('file_config', fJson);
             document.getElementById('search-results').innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Decoding...</td></tr>';
-
             try {
                 const res = await fetch('/api/upload', { method: 'POST', body: formData });
                 const data = await res.json();
-                if (data.status === 'ok') {
-                    renderLogs(data.content.split('\n').filter(l => l.trim()));
-                } else {
-                    alert("Error: " + data.error);
-                }
+                if (data.status === 'ok') renderLogs(data.content.split('\n').filter(l => l.trim()));
+                else alert("Error: " + data.error);
             } catch (e) { alert("Upload failed: " + e); }
         }
-
         function downloadLogs() {
             const app = document.getElementById('app-select').value;
             if (!app) { alert("Please enter an App Name"); return; }

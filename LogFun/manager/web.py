@@ -31,7 +31,19 @@ def api_balancer():
     return jsonify({"active_strategy": active, "params": params})
 
 
-# [FIX] New endpoint for app list
+# [FIX] API to switch strategy
+@app.route('/api/balancer/switch', methods=['POST'])
+def api_balancer_switch():
+    d = request.json
+    strategy = d.get('strategy')
+    params = d.get('params', {})
+    if strategy not in ['zscore', 'weighted_entropy']:
+        return jsonify({"error": "Invalid strategy"}), 400
+
+    get_balancer().update_strategy(strategy, params)
+    return jsonify({"status": "ok"})
+
+
 @app.route('/api/apps')
 def api_apps():
     return jsonify(get_storage().get_all_apps())
@@ -70,7 +82,6 @@ def api_search():
     s_type = request.args.get('type', 'function')
     keyword = request.args.get('kw', '')
     if not app_name or not keyword: return jsonify([])
-
     decoder = LogDecoder(app_name)
     return jsonify(decoder.search_logs(s_type, keyword, limit=500))
 
@@ -88,16 +99,13 @@ def api_upload():
     try:
         f_log = request.files.get('file_log')
         f_conf = request.files.get('file_config')
-        if not f_log or not f_conf:
-            return jsonify({"error": "Both .log and .json files are required"}), 400
-
+        if not f_log or not f_conf: return jsonify({"error": "Both .log and .json files are required"}), 400
         log_content = f_log.read().decode('utf-8', errors='ignore')
         conf_content = f_conf.read().decode('utf-8', errors='ignore')
         try:
             config_json = json.loads(conf_content)
         except:
             return jsonify({"error": "Invalid JSON Config file"}), 400
-
         decoder = LogDecoder(custom_config=config_json)
         decoded_text = decoder.decode_offline_files(log_content)
         return jsonify({"status": "ok", "content": decoded_text})

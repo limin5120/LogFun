@@ -45,6 +45,7 @@ class StorageManager:
     def sync_config(self, app_name, client_config):
         path = self._get_config_path(app_name)
         with self.lock:
+            # Load existing config from disk if memory is empty
             if app_name not in self.apps_data:
                 if os.path.exists(path):
                     try:
@@ -65,12 +66,21 @@ class StorageManager:
                     s_funcs[fid] = c_func
                     changed = True
                 else:
+                    # [FIX] Protect server-side 'muted_by' status
+                    # If server has it muted by balancer, keep it muted
+                    if s_funcs[fid].get("muted_by") == "balancer":
+                        c_func["enabled"] = False
+                        c_func["muted_by"] = "balancer"
+
                     c_tpls = c_func.get("templates", {})
                     s_tpls = s_funcs[fid].setdefault("templates", {})
                     for tid, c_tpl in c_tpls.items():
                         if tid not in s_tpls:
                             s_tpls[tid] = c_tpl
                             changed = True
+                        elif s_tpls[tid].get("muted_by") == "balancer":
+                            c_tpl["enabled"] = False
+                            c_tpl["muted_by"] = "balancer"
 
             self.apps_data[app_name] = server_data
             if changed: self._save_to_disk(app_name)
