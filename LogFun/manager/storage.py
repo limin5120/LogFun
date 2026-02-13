@@ -23,12 +23,20 @@ class StorageManager:
     def _get_log_path(self, app_name):
         return os.path.join(self._get_app_dir(app_name), f"{app_name}.log")
 
+    def get_all_apps(self):
+        """[FIX] List all available apps from storage directory."""
+        if not os.path.exists(self.root_dir):
+            return []
+        with self.lock:
+            return [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
+
     def update_stats(self, app_name, stats_dict):
         with self.lock:
             if app_name not in self.app_stats: self.app_stats[app_name] = {}
             curr = self.app_stats[app_name]
             for k, v in stats_dict.items():
-                curr[k] = max(curr.get(k, 0), v)
+                # [FIX] Accumulate stats (Agent sends delta, Server accumulates)
+                curr[k] = curr.get(k, 0) + v
 
     def get_app_stats(self, app_name):
         with self.lock:
@@ -68,11 +76,7 @@ class StorageManager:
             if changed: self._save_to_disk(app_name)
 
     def update_control(self, app_name, target_id, sub_id, enable, source="manual"):
-        """
-        Update enabled status with lazy loading support.
-        """
         with self.lock:
-            # [FIX 2] Ensure app data is loaded if missing in memory (e.g. fresh restart)
             if app_name not in self.apps_data:
                 path = self._get_config_path(app_name)
                 if os.path.exists(path):
@@ -97,7 +101,6 @@ class StorageManager:
                         target_node = funcs[fid]["templates"][tid]
                 else:
                     target_node = funcs[fid]
-                    # Cascade disable to templates
                     for tid in funcs[fid].get("templates", {}):
                         t_node = funcs[fid]["templates"][tid]
                         t_node["enabled"] = enable

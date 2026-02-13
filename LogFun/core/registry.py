@@ -2,7 +2,7 @@ import os
 import json
 import threading
 import atexit
-import time
+import hashlib
 from .config import get_config
 
 
@@ -34,6 +34,10 @@ class UnifiedRegistry:
         self._load()
         atexit.register(self._on_exit)
         self._initialized = True
+
+    @property
+    def app_id(self):
+        return hashlib.md5(self.config.app_name.encode('utf-8')).hexdigest()[:8]
 
     def _load(self):
         path = self.config.config_filepath
@@ -119,19 +123,18 @@ class UnifiedRegistry:
         return True
 
     def _record_block(self, key):
-        try:
+        # [FIX] Thread-safe recording
+        with self.data_lock:
             self.blocked_stats[key] = self.blocked_stats.get(key, 0) + 1
-        except:
-            pass
 
     def get_and_clear_stats(self):
-        return self.blocked_stats.copy()
+        # [FIX] Return and CLEAR stats to ensure correct accumulation on server
+        with self.data_lock:
+            stats = self.blocked_stats.copy()
+            self.blocked_stats.clear()
+            return stats
 
     def sync_from_server(self, server_data):
-        """
-        Merge server config.
-        [FIX] Reset blocked_stats when re-enabling logs.
-        """
         with self.data_lock:
             server_funcs = server_data.get("functions", {})
             local_funcs = self.data["functions"]
@@ -140,19 +143,14 @@ class UnifiedRegistry:
                 if fid in local_funcs:
                     is_enabled = s_func.get("enabled", True)
                     local_funcs[fid]["enabled"] = is_enabled
-
-                    # [FIX] Clear stats if re-enabled
-                    if is_enabled:
-                        self.blocked_stats.pop(str(fid), None)
+                    # If enabled, we can clear pending blocks for this key?
+                    # No, let get_and_clear_stats handle it naturally.
 
                     l_tpls = local_funcs[fid]["templates"]
                     for tid, s_tpl in s_func.get("templates", {}).items():
                         if tid in l_tpls:
                             t_enabled = s_tpl.get("enabled", True)
                             l_tpls[tid]["enabled"] = t_enabled
-                            # [FIX] Clear stats for template
-                            if t_enabled:
-                                self.blocked_stats.pop(f"{fid}:{tid}", None)
                         else:
                             l_tpls[tid] = s_tpl
                             self.tpl_content_to_id[(int(fid), s_tpl["content"])] = int(tid)

@@ -3,6 +3,7 @@ import struct
 import json
 import threading
 import time
+import queue
 from .config import get_config
 from .registry import get_registry
 from .controller import get_controller
@@ -23,6 +24,9 @@ class LogNetworkClient:
         self.stop_event = threading.Event()
         self.threads_started = False
 
+        # Async Send Queue for performance
+        self.log_queue = queue.Queue(maxsize=50000)
+
     def connect(self):
         if self.connected: return True
         try:
@@ -31,7 +35,6 @@ class LogNetworkClient:
             self.sock.connect(self.config.manager_address)
             self.connected = True
 
-            # Start threads only if not already running
             if not self.threads_started and threading.current_thread() is not threading.main_thread():
                 self.start_threads()
 
@@ -46,6 +49,7 @@ class LogNetworkClient:
             self.stop_event.clear()
             threading.Thread(target=self._heartbeat_loop, daemon=True).start()
             threading.Thread(target=self._receiver_loop, daemon=True).start()
+            threading.Thread(target=self._sender_loop, daemon=True).start()
             self.threads_started = True
 
     def disconnect(self):
@@ -60,32 +64,48 @@ class LogNetworkClient:
 
     def send_log(self, payload_data, log_type="compress"):
         """
-        Sends a log entry or a list of log entries (batch).
+        Non-blocking send. Pushes to queue.
+        Returns True if queued successfully, False if connection failed or queue full.
         """
         if not self.connected:
-            if not self.connect(): return False
-            self.start_threads()
+            # Try to connect once
+            if not self.connect():
+                # [FIX] If connection fails, return False IMMEDIATELY.
+                # This signals Agent to fallback to local file storage.
+                return False
+            else:
+                self.start_threads()
 
         try:
-            body = {"log": payload_data, "type": log_type}
-            self._send_packet(TYPE_LOG_DATA, body)
+            # Non-blocking put
+            self.log_queue.put_nowait({"log": payload_data, "type": log_type})
             return True
-        except:
-            self.connected = False
+        except queue.Full:
+            return False
+        except Exception:
             return False
 
+    def _sender_loop(self):
+        """
+        Background thread to drain queue and send over network.
+        """
+        while not self.stop_event.is_set():
+            if not self.connected:
+                time.sleep(0.5)
+                continue
+
+            try:
+                item = self.log_queue.get(timeout=0.2)
+                self._send_packet(TYPE_LOG_DATA, item)
+                self.log_queue.task_done()
+            except queue.Empty:
+                pass
+            except Exception:
+                self.connected = False
+
     def send_handshake(self, blocking=False):
-        """
-        Sends the full Unified Registry config.
-        """
         reg = get_registry()
-        # [FIX] Send the unified 'config' tree + stats
-        body = {
-            "app_name": self.config.app_name,
-            "config": reg.data,
-            # If registry has stats feature enabled:
-            "blocked_stats": getattr(reg, 'get_and_clear_stats', lambda: {})()
-        }
+        body = {"app_name": self.config.app_name, "config": reg.data, "blocked_stats": getattr(reg, 'get_and_clear_stats', lambda: {})()}
 
         if blocking:
             try:
@@ -113,12 +133,7 @@ class LogNetworkClient:
             if self.connected:
                 try:
                     reg = get_registry()
-                    body = {
-                        "timestamp": time.time(),
-                        "app_name": self.config.app_name,
-                        # [FIX] Send stats if available
-                        "blocked_stats": getattr(reg, 'get_and_clear_stats', lambda: {})()
-                    }
+                    body = {"timestamp": time.time(), "app_name": self.config.app_name, "blocked_stats": getattr(reg, 'get_and_clear_stats', lambda: {})()}
                     self._send_packet(TYPE_HEARTBEAT, body)
                 except:
                     self.connected = False
@@ -150,7 +165,6 @@ class LogNetworkClient:
         try:
             data = json.loads(body.decode('utf-8'))
             if p_type == TYPE_HEARTBEAT:
-                # [FIX] Sync full config tree from server
                 if "config" in data:
                     get_controller().sync_policy(data["config"])
         except:

@@ -2,11 +2,12 @@ import time
 import sys
 import contextvars
 import os
+import json
 from functools import wraps
 from inspect import isgenerator
 from .config import get_config, LogType
 from .agent import get_agent
-from .registry import get_registry  # [FIX] Import unified registry
+from .registry import get_registry
 from .logger import CURRENT_LOG_BUFFER
 from .context import CURRENT_FUNC_ID
 from .controller import get_controller
@@ -30,7 +31,7 @@ class FunctionTracingGhost(object):
         self.logger = logger
         self.config = get_config()
         self.agent = get_agent()
-        self.registry = get_registry()  # [FIX]
+        self.registry = get_registry()
         self.controller = get_controller()
 
         try:
@@ -44,7 +45,7 @@ class FunctionTracingGhost(object):
 
     def __call__(self, function, args, keywords):
         func_id = self.cached_func_id
-        # [CRITICAL] Set context first to allow internal logging control even if muted
+        # Set context first to allow internal logging control even if muted
         token_fid = CURRENT_FUNC_ID.set(func_id)
 
         try:
@@ -62,7 +63,6 @@ class FunctionTracingGhost(object):
             CURRENT_FUNC_ID.reset(token_fid)
 
     def _run_normal(self, function, args, keywords):
-        # [FIX] Use static template string to prevent template ID explosion
         self.logger.info("Call %s | Args: %s Kwargs: %s", self.func_name, args, keywords)
         start_time = time.time()
         try:
@@ -93,12 +93,32 @@ class FunctionTracingGhost(object):
 
     def _flush_compressed_log(self, start_time, duration, buffer, func_id):
         if not buffer: return
-        tpl_ids = [item[0] for item in buffer]
+
+        # Buffer item format: (level, tpl_id, args_tuple)
+
+        # 1. Prepare Log Metadata: [[Level, TplID], ...]
+        # This structure maps 1:1 with the execution order
+        log_meta = [[item[0], item[1]] for item in buffer]
+
+        # 2. Flatten all variables
         all_vars = []
         for item in buffer:
-            all_vars.extend(item[1])
-        payload = f"{start_time:.4f}|{func_id}|{duration:.2f}|{tpl_ids}|{all_vars}"
-        self.agent.log(payload)
+            # item[2] is the args tuple
+            all_vars.extend(item[2])
+
+        # 3. Construct Payload
+        # Format: <Timestamp> <AppID> <FuncID> <Duration> <LogDataJSON> <VarsJSON>
+        # Use JSON for complex structures to avoid delimiter collision and handle escaping
+        try:
+            app_id = self.registry.app_id
+            log_data_json = json.dumps(log_meta, ensure_ascii=False)
+            vars_json = json.dumps(all_vars, ensure_ascii=False)
+
+            payload = f"{start_time:.4f} {app_id} {func_id} {duration:.2f} {log_data_json} {vars_json}"
+            self.agent.log(payload)
+        except Exception:
+            # Failsafe for serialization errors
+            pass
 
 
 class GeneratorIteratorTracingProxy(object):

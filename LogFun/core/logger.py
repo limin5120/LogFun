@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from .config import get_config, LogType, LogMode
 from .agent import get_agent
-from .registry import get_registry  # [FIX] Import unified registry
+from .registry import get_registry
 from .context import CURRENT_FUNC_ID
 from .controller import get_controller
 
@@ -16,7 +16,7 @@ class Logger:
     def __init__(self, name="root"):
         self.name = name
         self.agent = get_agent()
-        self.registry = get_registry()  # [FIX]
+        self.registry = get_registry()
         self.config = get_config()
         self.controller = get_controller()
 
@@ -24,7 +24,6 @@ class Logger:
         current_type = self.config.log_type
         func_id = CURRENT_FUNC_ID.get()
 
-        # [FIX] Get ID from unified registry (msg is the template string)
         tpl_id = self.registry.get_tpl_id(func_id, msg)
 
         # Policy Check
@@ -66,7 +65,8 @@ class Logger:
                 stored_args = args
                 if args and len(args) == 1 and isinstance(args[0], tuple):
                     stored_args = args[0]
-                buffer.append((tpl_id, stored_args or ()))
+                # [FIX] Store level along with tpl_id and args
+                buffer.append((level, tpl_id, stored_args or ()))
             else:
                 # Fallback for outside trace
                 orig = self.config.log_type

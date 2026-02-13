@@ -5,16 +5,24 @@
     <meta charset="UTF-8">
     <title>LogFun Manager</title>
     <style>
+        :root {
+            --primary: #00b894;
+            --danger: #ff7675;
+            --dark: #2d3436;
+            --light: #f4f7f6;
+            --gray: #dfe6e9;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f4f7f6;
+            background: var(--light);
             margin: 0;
             padding: 20px;
             color: #333;
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -23,6 +31,56 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            color: var(--dark);
+        }
+
+        .app-selector select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 220px;
+            font-weight: bold;
+            color: var(--primary);
+            background: #fff;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         .card-grid {
@@ -36,7 +94,7 @@
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
 
         .card h3 {
@@ -44,13 +102,21 @@
             font-size: 12px;
             color: #888;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .card .value {
             font-size: 28px;
             font-weight: bold;
-            color: #2c3e50;
+            color: var(--dark);
+        }
+
+        .card .value-sm {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--dark);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .card .sub {
@@ -60,77 +126,54 @@
             min-height: 20px;
         }
 
-        /* Increased spacing */
-
         .section {
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .controls {
-            margin-bottom: 15px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        input[type="text"] {
-            padding: 6px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-        }
-
-        button {
-            cursor: pointer;
-            padding: 6px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-        }
-
-        th,
-        td {
-            text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #eee;
         }
 
         th {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 2px solid var(--gray);
             color: #888;
-            font-weight: 500;
             font-size: 13px;
-            background: #fafafa;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
         }
 
         .btn {
             border: none;
             color: white;
             border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 11px;
+            padding: 4px 10px;
+            font-size: 12px;
             cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        .btn:hover {
-            opacity: 0.8;
         }
 
         .btn-mute {
-            background: #ff7675;
+            background: var(--danger);
         }
 
         .btn-unmute {
-            background: #00b894;
+            background: var(--primary);
+        }
+
+        .btn-action {
+            background: #0984e3;
+            padding: 8px 16px;
+            font-size: 14px;
         }
 
         .status-badge {
@@ -140,36 +183,31 @@
             font-weight: bold;
         }
 
-        .active {
-            color: #00b894;
+        .badge-on {
+            color: var(--primary);
             background: #e6fffa;
         }
 
-        .muted {
-            color: #d63031;
+        .badge-off {
+            color: var(--danger);
             background: #ffeaea;
         }
 
-        /* Manual Mute */
-        .auto-muted {
+        .badge-auto {
             color: #6c5ce7;
             background: #dfe6e9;
         }
 
-        /* Balancer Mute */
-
-        .blocked-badge {
-            font-size: 10px;
-            background: #d63031;
+        .badge-blocked {
+            background: var(--danger);
             color: white;
-            padding: 2px 5px;
+            padding: 2px 6px;
             border-radius: 10px;
-            margin-left: 8px;
+            font-size: 10px;
             font-weight: bold;
-            vertical-align: middle;
+            margin-left: 8px;
         }
 
-        /* Param Badges */
         .param-badge {
             display: inline-block;
             background: #f0f2f5;
@@ -179,14 +217,10 @@
             padding: 2px 6px;
             font-size: 11px;
             margin-right: 5px;
-            margin-bottom: 2px;
-            font-family: monospace;
         }
 
         .func-row {
-            background: #fff;
             cursor: pointer;
-            user-select: none;
         }
 
         .func-row:hover {
@@ -202,12 +236,79 @@
             display: inline-block;
             width: 12px;
             transition: transform 0.2s;
-            font-size: 10px;
-            color: #888;
+            color: #bbb;
         }
 
         .chevron.open {
             transform: rotate(90deg);
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+
+        .search-select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .search-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .upload-area {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px dashed #ddd;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .upload-area label {
+            font-size: 13px;
+            color: #666;
+            font-weight: bold;
+        }
+
+        .log-table {
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        .log-time {
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .log-lvl {
+            font-weight: bold;
+        }
+
+        .lvl-INFO {
+            color: var(--primary);
+        }
+
+        .lvl-ERROR {
+            color: var(--danger);
+        }
+
+        .lvl-WARN {
+            color: #e17055;
+        }
+
+        .log-func {
+            color: #0984e3;
         }
     </style>
 </head>
@@ -215,57 +316,145 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>LogFun Manager</h1>
-            <div style="color: #00b894; font-weight: bold;">● Connected</div>
-        </div>
-
-        <div class="card-grid">
-            <div class="card">
-                <h3>Real-time QPS</h3>
-                <div class="value" id="qps-val">0</div>
-            </div>
-            <div class="card">
-                <h3>Total Logs</h3>
-                <div class="value" id="total-val">0</div>
-            </div>
-            <div class="card">
-                <h3>Uptime</h3>
-                <div class="value" id="uptime-val">0s</div>
-            </div>
-            <div class="card">
-                <h3>Active Strategy</h3>
-                <div class="value" id="strategy-val">-</div>
-                <div class="sub" id="strategy-sub"></div>
+            <h1><span>⚡</span> LogFun Manager</h1>
+            <div class="app-selector">
+                <label>Target App:</label>
+                <select id="app-select" onchange="refreshAll()">
+                    <option value="" disabled selected>Loading...</option>
+                </select>
+                <button class="btn btn-action" onclick="refreshAll()">Refresh</button>
             </div>
         </div>
 
-        <div class="section">
-            <div class="controls">
-                <div>
-                    <label>App:</label>
-                    <input type="text" id="app-select" value="demo_LogFun" placeholder="App Name">
-                    <button onclick="refreshAll()">Load</button>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard & Control</button>
+            <button class="tab-btn" onclick="switchTab('explorer')">Log Explorer</button>
+        </div>
+
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="card-grid">
+                <div class="card">
+                    <h3>QPS</h3>
+                    <div class="value" id="qps-val">0</div>
                 </div>
-                <input type="text" id="search-box" placeholder="Search functions..." onkeyup="renderTree()">
+                <div class="card">
+                    <h3>Total Logs</h3>
+                    <div class="value" id="total-val">0</div>
+                </div>
+                <div class="card">
+                    <h3>Uptime</h3>
+                    <div class="value" id="uptime-val">0s</div>
+                </div>
+                <div class="card">
+                    <h3>Active Strategy</h3>
+                    <div class="value-sm" id="strategy-val">-</div>
+                    <div class="sub" id="strategy-sub"></div>
+                </div>
             </div>
+            <div class="section">
+                <div style="margin-bottom:15px; text-align:right;">
+                    <input type="text" id="filter-box" placeholder="Filter functions..."
+                        style="padding:6px; border:1px solid #ddd; border-radius:4px;" onkeyup="renderTree()">
+                </div>
+                <table id="tree-table">
+                    <thead>
+                        <tr>
+                            <th width="30%">Function / ID</th>
+                            <th>Content</th>
+                            <th width="10%">Status</th>
+                            <th width="10%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tree-body"></tbody>
+                </table>
+            </div>
+        </div>
 
-            <table id="tree-table">
-                <thead>
-                    <tr>
-                        <th style="width: 250px;">ID / Name</th>
-                        <th>Content</th>
-                        <th style="width: 100px;">Status</th>
-                        <th style="width: 120px;">Action</th>
-                    </tr>
-                </thead>
-                <tbody id="tree-body"></tbody>
-            </table>
+        <div id="tab-explorer" class="tab-content">
+            <div class="section">
+                <div class="search-bar">
+                    <select id="search-type" class="search-select">
+                        <option value="function">By Function Name</option>
+                        <option value="template">By Log Template</option>
+                        <option value="variable">By Variable Value</option>
+                    </select>
+                    <input type="text" id="search-kw" class="search-input" placeholder="Keyword..."
+                        onkeypress="handleEnter(event)">
+                    <button class="btn btn-action" onclick="searchLogs()">Search</button>
+                    <button class="btn" style="background:#636e72" onclick="downloadLogs()">⬇ Export</button>
+                </div>
+
+                <div class="upload-area">
+                    <label>Offline Decode:</label>
+                    <input type="file" id="file-log" accept=".log">
+                    <input type="file" id="file-json" accept=".json">
+                    <button class="btn btn-action" onclick="uploadAndDecode()">Upload & Decode</button>
+                </div>
+
+                <div style="overflow-x: auto; margin-top:20px; max-height:600px; overflow-y:auto;">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Level</th>
+                                <th>Function</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="search-results">
+                            <tr>
+                                <td colspan="4" style="text-align:center; color:#999; padding:30px;">Search or Upload to
+                                    view logs.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         let globalConfig = {};
         let expandedNodes = new Set();
+        let currentTab = 'dashboard';
+
+        window.onload = async () => {
+            await loadAppList();
+            setInterval(() => { if (currentTab === 'dashboard') refreshAll(); }, 1000);
+        };
+
+        async function loadAppList() {
+            try {
+                const apps = await apiCall('/api/apps');
+                const select = document.getElementById('app-select');
+                select.innerHTML = '';
+
+                if (apps.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.text = "No Apps Found";
+                    select.add(opt);
+                    return;
+                }
+
+                apps.forEach(app => {
+                    const opt = document.createElement('option');
+                    opt.value = app;
+                    opt.text = app;
+                    if (app === 'demo_LogFun') opt.selected = true;
+                    select.add(opt);
+                });
+                refreshAll();
+            } catch (e) { console.error(e); }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            if (tab === 'dashboard') refreshAll();
+        }
 
         async function apiCall(url, method = 'GET', body = null) {
             const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -273,74 +462,57 @@
             return (await fetch(url, opts)).json();
         }
 
-        function formatTime(seconds) {
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = seconds % 60;
-            return `${h}h ${m}m ${s}s`;
+        // [FIX] Removed decimal places from uptime display
+        function formatTime(s) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = Math.floor(s % 60);
+            return `${h}h ${m}m ${sec}s`;
         }
 
-        // Helper to format params cleanly
         function renderParams(params) {
-            if (!params || Object.keys(params).length === 0) return '<span style="color:#ccc">Default</span>';
+            if (!params || Object.keys(params).length === 0) return '';
             return Object.entries(params).map(([k, v]) => {
-                // Convert "window_size" -> "Window Size"
                 const label = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 return `<span class="param-badge">${label}: ${v}</span>`;
             }).join('');
         }
 
         async function refreshAll() {
-            const app = document.getElementById('app-select').value || 'root';
+            const app = document.getElementById('app-select').value;
+            if (!app || app === "No Apps Found") return;
             try {
                 const [status, balancer, config] = await Promise.all([
                     apiCall('/api/status'),
                     apiCall('/api/balancer'),
                     apiCall(`/api/registry?app=${app}`)
                 ]);
-
                 document.getElementById('qps-val').innerText = status.qps;
                 document.getElementById('total-val').innerText = status.total_logs.toLocaleString();
                 document.getElementById('uptime-val').innerText = formatTime(status.uptime);
-
-                // Strategy Display Update
                 document.getElementById('strategy-val').innerText = (balancer.active_strategy || 'N/A').toUpperCase();
                 document.getElementById('strategy-sub').innerHTML = renderParams(balancer.params);
-
                 globalConfig = config;
                 renderTree();
             } catch (e) { console.error(e); }
         }
 
         function toggleFunc(fid) {
-            if (expandedNodes.has(fid)) expandedNodes.delete(fid);
-            else expandedNodes.add(fid);
+            if (expandedNodes.has(fid)) expandedNodes.delete(fid); else expandedNodes.add(fid);
             renderTree();
-        }
-
-        function renderStatusBadge(enabled, mutedBy) {
-            if (enabled) return '<span class="status-badge active">ON</span>';
-            if (mutedBy === 'balancer') return '<span class="status-badge auto-muted">AUTO</span>';
-            return '<span class="status-badge muted">OFF</span>';
         }
 
         function renderTree() {
             const body = document.getElementById('tree-body');
             body.innerHTML = '';
-
             const funcs = globalConfig.functions || {};
-            const term = document.getElementById('search-box').value.toLowerCase();
+            const filter = document.getElementById('filter-box').value.toLowerCase();
             let hasData = false;
 
             for (let fid in funcs) {
                 const f = funcs[fid];
                 const fName = f.name || `Func ${fid}`;
-                const fEnabled = (f.enabled !== false);
-                const fBlocked = f._blocked || 0;
-                const tpls = f.templates || {};
-
-                const matches = fName.toLowerCase().includes(term) || fid.includes(term);
-                if (term && !matches) continue;
+                if (filter && !fName.toLowerCase().includes(filter) && !fid.includes(filter)) continue;
                 hasData = true;
 
                 const isExpanded = expandedNodes.has(fid);
@@ -348,26 +520,28 @@
                 row.className = 'func-row';
                 row.onclick = () => toggleFunc(fid);
 
-                const blockBadge = (fBlocked > 0 && !fEnabled) ? `<span class="blocked-badge">Blocked: ${fBlocked}</span>` : '';
-                const statusBadge = renderStatusBadge(fEnabled, f.muted_by);
+                let statusBadge = f.enabled ? '<span class="status-badge badge-on">ON</span>' : '<span class="status-badge badge-off">OFF</span>';
+                if (!f.enabled && f.muted_by === 'balancer') statusBadge = '<span class="status-badge badge-auto">AUTO</span>';
+
+                const blockBadge = (!f.enabled && f._blocked > 0) ? `<span class="badge-blocked">${f._blocked}</span>` : '';
                 const chevron = `<span class="chevron ${isExpanded ? 'open' : ''}">▶</span>`;
 
                 row.innerHTML = `
                 <td>${chevron} <code>${fid}</code></td>
                 <td><strong>${fName}</strong> ${blockBadge}</td>
                 <td>${statusBadge}</td>
-                <td><button onclick="event.stopPropagation(); control('${fid}', null, '${fEnabled ? 'mute' : 'unmute'}')" 
-                    class="btn ${fEnabled ? 'btn-mute' : 'btn-unmute'}">${fEnabled ? 'Disable' : 'Enable'}</button></td>
+                <td><button onclick="event.stopPropagation(); control('${fid}', null, '${f.enabled ? 'mute' : 'unmute'}')" 
+                    class="btn ${f.enabled ? 'btn-mute' : 'btn-unmute'}">${f.enabled ? 'Disable' : 'Enable'}</button></td>
             `;
                 body.appendChild(row);
 
                 if (isExpanded) {
+                    const tpls = f.templates || {};
                     for (let tid in tpls) {
                         const t = tpls[tid];
-                        const tEnabled = (t.enabled !== false);
-                        const tBlocked = t._blocked || 0;
-                        const tStatusBadge = renderStatusBadge(tEnabled, t.muted_by);
-                        const tBlockBadge = (tBlocked > 0 && !tEnabled) ? `<span class="blocked-badge">${tBlocked}</span>` : '';
+                        let tStatus = t.enabled ? '<span class="status-badge badge-on">ON</span>' : '<span class="status-badge badge-off">OFF</span>';
+                        if (!t.enabled && t.muted_by === 'balancer') tStatus = '<span class="status-badge badge-auto">AUTO</span>';
+                        const tBlockBadge = (!t.enabled && t._blocked > 0) ? `<span class="badge-blocked">${t._blocked}</span>` : '';
 
                         const tRow = document.createElement('tr');
                         tRow.className = 'tpl-row';
@@ -375,26 +549,83 @@
                         tRow.innerHTML = `
                         <td style="text-align:right; color:#888;">T:${tid}</td>
                         <td style="font-family:monospace; font-size:0.9em;">${t.content} ${tBlockBadge}</td>
-                        <td>${tStatusBadge}</td>
-                        <td><button onclick="control('${fid}', '${tid}', '${tEnabled ? 'mute' : 'unmute'}')" 
-                            class="btn ${tEnabled ? 'btn-mute' : 'btn-unmute'}">${tEnabled ? 'Mute' : 'Unmute'}</button></td>
+                        <td>${tStatus}</td>
+                        <td><button onclick="control('${fid}', '${tid}', '${t.enabled ? 'mute' : 'unmute'}')" 
+                            class="btn ${t.enabled ? 'btn-mute' : 'btn-unmute'}">${t.enabled ? 'Mute' : 'Unmute'}</button></td>
                     `;
                         body.appendChild(tRow);
                     }
                 }
             }
-            if (!hasData) body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ccc;">No functions found</td></tr>';
+            if (!hasData) body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">No matching functions</td></tr>';
         }
 
         async function control(id, subId, action) {
             const app = document.getElementById('app-select').value;
-            const enable = (action === 'unmute');
             await apiCall('/api/control', 'POST', { app, id, sub_id: subId, action });
             refreshAll();
         }
 
-        setInterval(refreshAll, 1000);
-        refreshAll();
+        function renderLogs(logs) {
+            const tbody = document.getElementById('search-results');
+            tbody.innerHTML = '';
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">No matching logs found.</td></tr>';
+                return;
+            }
+            logs.forEach(line => {
+                const parts = line.match(/^(.+?) \[(.+?)\] \[(.+?)\] (.*)$/);
+                if (parts) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td class="log-time">${parts[1]}</td><td class="log-lvl lvl-${parts[2]}">${parts[2]}</td><td class="log-func">${parts[3]}</td><td class="log-msg">${parts[4]}</td>`;
+                    tbody.appendChild(row);
+                } else {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4"><pre>${line}</pre></td>`;
+                    tbody.appendChild(row);
+                }
+            });
+        }
+
+        function handleEnter(e) { if (e.key === 'Enter') searchLogs(); }
+
+        async function searchLogs() {
+            const app = document.getElementById('app-select').value;
+            const type = document.getElementById('search-type').value;
+            const kw = document.getElementById('search-kw').value;
+            if (!app || !kw) { alert("App Name and Keyword are required"); return; }
+            const res = await fetch(`/api/search?app=${app}&type=${type}&kw=${encodeURIComponent(kw)}`);
+            const logs = await res.json();
+            renderLogs(logs);
+        }
+
+        async function uploadAndDecode() {
+            const fLog = document.getElementById('file-log').files[0];
+            const fJson = document.getElementById('file-json').files[0];
+            if (!fLog || !fJson) { alert("Please select both .log and .json files"); return; }
+
+            const formData = new FormData();
+            formData.append('file_log', fLog);
+            formData.append('file_config', fJson);
+
+            document.getElementById('search-results').innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Decoding...</td></tr>';
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    renderLogs(data.content.split('\n').filter(l => l.trim()));
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (e) { alert("Upload failed: " + e); }
+        }
+
+        function downloadLogs() {
+            const app = document.getElementById('app-select').value;
+            if (!app) { alert("Please enter an App Name"); return; }
+            window.location.href = `/api/download?app=${app}`;
+        }
     </script>
 </body>
 
