@@ -205,3 +205,18 @@ python test_balancer_scenarios.py
 *Observation*: On the Web Console, the status of the `spam_bot_low_entropy` function should change to **AUTO** (Auto-Muted), while `valid_burst_high_entropy` remains **ON**.
 
 ---
+
+## 📝 Citation
+
+If you find this code or our paper useful in your research, please consider citing our work:
+
+```bibtex
+@article{li2026logfun,
+  title={LogFun: An Efficient Function-Level Log Management Framework for Systems Implemented with Python},
+  author={Li, Min and Tan, Gou and He, Mingdong and Yu, Guangba and Chen, Pengfei and Zhang, Chuanfu},
+  journal={Journal of Systems and Software},
+  pages={112854},
+  year={2026},
+  publisher={Elsevier}
+}
+```
